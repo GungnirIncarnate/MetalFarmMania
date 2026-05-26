@@ -262,10 +262,10 @@ namespace MFM::Tags
 
 		for (const auto& entry : entries)
 		{
-			const auto itemTypeTagNames = CollectItemTypeTagNamesFromPath(entry.itemTypePath);
+			const auto itemTypeTagNames = CollectItemTypeTagNamesFromPath(entry.GetInputItemPath());
 			if (itemTypeTagNames.empty())
 			{
-				PCL_WarnLog("Tag lookup found no gameplay tags for entry '{}' itemTypePath '{}'.", ToWideString(entry.id), ToWideString(entry.itemTypePath));
+				PCL_WarnLog("Tag lookup found no gameplay tags for entry '{}' inputItemPath '{}'.", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
 				continue;
 			}
 

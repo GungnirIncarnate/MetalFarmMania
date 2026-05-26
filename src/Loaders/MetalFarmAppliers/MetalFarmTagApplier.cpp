@@ -112,10 +112,10 @@ namespace
 
 		for (const auto& entry : entries)
 		{
-			auto* itemType = MFM::Tags::TagLookupHelper::ResolveItemTypeFromPath(entry.itemTypePath);
+			auto* itemType = MFM::Tags::TagLookupHelper::ResolveItemTypeFromPath(entry.GetInputItemPath());
 			if (!itemType)
 			{
-				PCL_WarnLog("MetalFarm item-type seed registration skipped for '{}' because itemTypePath '{}' could not be resolved.", ToWideString(entry.id), ToWideString(entry.itemTypePath));
+				PCL_WarnLog("MetalFarm item-type seed registration skipped for '{}' because inputItemPath '{}' could not be resolved.", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
 				continue;
 			}
 

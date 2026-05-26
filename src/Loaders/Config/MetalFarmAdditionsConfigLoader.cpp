@@ -11,6 +11,23 @@
 namespace
 {
 	using nlohmann::json;
+	constexpr const char* kDefaultCopperResonatablePath = "/Game/Data/Resonatable/DA_MetalFarm_CopperDeposit_ResonatableData.DA_MetalFarm_CopperDeposit_ResonatableData_C";
+	constexpr const char* kDefaultSeedMaterialPath = "/Game/Art/Resources/MI_Resource_CopperNode_02a.MI_Resource_CopperNode_02a_C";
+
+	auto NormalizeGrowthSpeedToTierTag(const std::string& growthSpeed) -> std::string
+	{
+		if (growthSpeed == "fast")
+		{
+			return "ItemType.TunableData.SeedGrowerTime.Fast";
+		}
+
+		if (growthSpeed == "slow")
+		{
+			return "ItemType.TunableData.SeedGrowerTime.Slow";
+		}
+
+		return "ItemType.TunableData.SeedGrowerTime.Medium";
+	}
 
 	auto ReadRequiredString(const json& object, const char* fieldName, std::string& outValue) -> bool
 	{
@@ -36,6 +53,50 @@ namespace
 		buffer << file.rdbuf();
 		outContent = buffer.str();
 		return true;
+	}
+
+	auto TryReadOutputs(const json& entryJson, std::vector<MFM::Loader::Config::MetalFarmOutputEntry>& outOutputs) -> bool
+	{
+		const auto outputsIt = entryJson.find("outputs");
+		if (outputsIt == entryJson.end() || !outputsIt->is_array() || outputsIt->empty())
+		{
+			return false;
+		}
+
+		for (const auto& outputJson : *outputsIt)
+		{
+			if (!outputJson.is_object())
+			{
+				return false;
+			}
+
+			MFM::Loader::Config::MetalFarmOutputEntry output{};
+			if (!ReadRequiredString(outputJson, "resourceClassPath", output.resourceClassPath))
+			{
+				return false;
+			}
+
+			if (!outputJson.contains("yield") || !outputJson["yield"].is_number_integer())
+			{
+				return false;
+			}
+
+			output.yield = outputJson["yield"].get<int>();
+			if (output.yield <= 0)
+			{
+				return false;
+			}
+
+			output.dropChance = outputJson.value("dropChance", 1.0f);
+			if (output.dropChance < 0.0f || output.dropChance > 1.0f)
+			{
+				return false;
+			}
+
+			outOutputs.emplace_back(std::move(output));
+		}
+
+		return !outOutputs.empty();
 	}
 }
 
@@ -92,9 +153,9 @@ namespace MFM::Loader::Config
 		}
 
 		const auto versionIt = root.find("schemaVersion");
-		if (versionIt == root.end() || !versionIt->is_number_integer() || versionIt->get<int>() != 1)
+		if (versionIt == root.end() || !versionIt->is_number_integer() || versionIt->get<int>() != 2)
 		{
-			PCL_ErrorLog("Unsupported MetalFarm additions schemaVersion in {} (expected 1)", configPath.wstring());
+			PCL_ErrorLog("Unsupported MetalFarm additions schemaVersion in {} (expected 2)", configPath.wstring());
 			return entries;
 		}
 
@@ -116,28 +177,30 @@ namespace MFM::Loader::Config
 			}
 
 			MetalFarmAdditionEntry entry{};
-			entry.enabled = entryJson.value("enabled", true);
-			if (!entry.enabled)
+			const bool hasCoreFields = ReadRequiredString(entryJson, "id", entry.id) &&
+			                           ReadRequiredString(entryJson, "inputItemPath", entry.inputItemPath);
+			if (!hasCoreFields)
 			{
+				PCL_WarnLog("Skipping MetalFarm entry #{} due to missing required fields", index);
 				continue;
 			}
 
-			const bool valid = ReadRequiredString(entryJson, "id", entry.id) &&
-			                  ReadRequiredString(entryJson, "itemTypePath", entry.itemTypePath) &&
-			                  ReadRequiredString(entryJson, "resonatableDataPath", entry.resonatableDataPath) &&
-			                  ReadRequiredString(entryJson, "seedMaterialPath", entry.seedMaterialPath) &&
-			                  ReadRequiredString(entryJson, "metalTierTag", entry.metalTierTag);
+			entry.growthSpeed = entryJson.value("growthSpeed", std::string{"medium"});
+			entry.metalTierTag = NormalizeGrowthSpeedToTierTag(entry.growthSpeed);
+			entry.seedMaterialPath = kDefaultSeedMaterialPath;
+			entry.resonatableDataPath = kDefaultCopperResonatablePath;
+			entry.itemTypePath = entry.inputItemPath;
 
-			if (!valid)
+			if (!TryReadOutputs(entryJson, entry.outputs))
 			{
-				PCL_WarnLog("Skipping MetalFarm entry #{} due to missing required fields", index);
+				PCL_WarnLog("Skipping MetalFarm entry #{} due to invalid or missing outputs array", index);
 				continue;
 			}
 
 			entries.emplace_back(std::move(entry));
 		}
 
-		PCL_Log("Loaded {} enabled MetalFarm addition entries from {}", entries.size(), configPath.wstring());
+		PCL_Log("Loaded {} MetalFarm addition entries from {}", entries.size(), configPath.wstring());
 		return entries;
 	}
 }

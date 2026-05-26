@@ -1,0 +1,32 @@
+{
+  // Mock next-gen schema for testing only.
+  // This file is not consumed by current code until the new loader is implemented.
+  "schemaVersion": 2,
+  "entries": [
+    {
+      "id": "celestine",
+      // Input item placed into the metal farm
+      "inputItemPath": "/Game/Data/ItemType/Tools/DA_Flares_ItemType.DA_Flares_ItemType_C",
+
+      // Player-facing growth tuning (maps internally to tier tag)
+      "growthSpeed": "medium",
+
+      // Multi-output support: each line is a possible drop bundle.
+      "outputs": [
+        {
+          "resourceClassPath": "/Game/Blueprints/Items/Resources/BP_Celestine.BP_Celestine_C",
+          "yield": 3,
+          "dropChance": 1.0
+        },
+        {
+          "resourceClassPath": "/Game/Blueprints/Items/Resources/BP_Celestine.BP_Celestine_C",
+          "yield": 1,
+          "dropChance": 0.5
+        }
+      ],
+
+      // Optional convenience notes for mod authors
+      "notes": "Mock v2 entry based on current live celestine config"
+    }
+  ]
+}

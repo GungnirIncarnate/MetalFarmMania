@@ -1,5 +1,8 @@
 #include "Hooks/ReceiveBeginPlayHook.h"
 
+#include <exception>
+#include <string>
+
 #include <UE4SSRuntime.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/UObject.hpp>
@@ -12,6 +15,11 @@
 namespace
 {
 	using namespace RC::Unreal;
+
+	auto ToWideString(const std::string& value) -> std::wstring
+	{
+		return {value.begin(), value.end()};
+	}
 
 	auto IsTargetMetalFarm(const UObject* context) -> bool
 	{
@@ -31,11 +39,7 @@ namespace
 		}
 
 		const auto functionName = function->GetName();
-		if (functionName != STR("ReceiveBeginPlay") &&
-			functionName != STR("OnSeedAdded") &&
-			functionName != STR("OnSeedRemoved") &&
-			functionName != STR("OnSeedChanged") &&
-			functionName != STR("OnSeedSpawned"))
+		if (functionName != STR("ReceiveBeginPlay"))
 		{
 			return false;
 		}
@@ -50,11 +54,22 @@ namespace
 			return;
 		}
 
-		PCL_Log("MetalFarm trigger matched {} on {}.", function->GetName(), context->GetFullName());
-		MFM::Loader::MetalFarmTagApplier::TryApply(context);
-		MFM::Loader::MetalFarmTableApplier::TryApply(context);
-		MFM::Loader::MetalFarmTagApplier::LogDiagnostics(context);
-		MFM::Loader::MetalFarmTableApplier::LogDiagnostics(context);
+		try
+		{
+			PCL_Log("MetalFarm trigger matched {} on {}.", function->GetName(), context->GetFullName());
+			MFM::Loader::MetalFarmTagApplier::TryApply(context);
+			MFM::Loader::MetalFarmTableApplier::TryApply(context);
+			MFM::Loader::MetalFarmTagApplier::LogDiagnostics(context);
+			MFM::Loader::MetalFarmTableApplier::LogDiagnostics(context);
+		}
+		catch (const std::exception& exception)
+		{
+			PCL_ErrorLog("ReceiveBeginPlay hook caught exception on {}: {}", context ? context->GetFullName() : STR("<null>"), ToWideString(exception.what()));
+		}
+		catch (...)
+		{
+			PCL_ErrorLog("ReceiveBeginPlay hook caught unknown exception on {}.", context ? context->GetFullName() : STR("<null>"));
+		}
 	}
 }
 

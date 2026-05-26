@@ -9,6 +9,8 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "Loader/ResonableMaterials/ResonableMaterialAlterationApplier.h"
+#include "Loader/ResonableMaterials/ResonableMaterialAssetCloner.h"
 #include "Logger/Logger.h"
 
 namespace
@@ -154,8 +156,26 @@ namespace
 
 		for (const auto& entry : entries)
 		{
-			const auto itemType = ResolveObject(entry.itemTypePath);
-			const auto resonatableData = ResolveObject(entry.resonatableDataPath);
+			const auto itemType = ResolveObject(entry.GetInputItemPath());
+			auto* resonatableData = static_cast<UObject*>(nullptr);
+			if (!entry.outputs.empty())
+			{
+				resonatableData = MFM::Loader::ResonableMaterials::ResonableMaterialAssetCloner::CloneForEntry(entry);
+				if (resonatableData)
+				{
+					const bool appliedOutputs = MFM::Loader::ResonableMaterials::ResonableMaterialAlterationApplier::ApplyOutputs(resonatableData, entry.outputs);
+					if (!appliedOutputs)
+					{
+						PCL_WarnLog("MetalFarm entry '{}' could not apply outputs to cloned resonatable data yet; using cloned template object unchanged.", ToWideString(entry.id));
+					}
+				}
+			}
+
+			if (!resonatableData)
+			{
+				resonatableData = ResolveObject(entry.resonatableDataPath);
+			}
+
 			const auto seedMaterial = ResolveObject(entry.seedMaterialPath);
 			const auto metalTierTagName = FName(ToWideString(entry.metalTierTag).c_str(), FNAME_Find);
 
@@ -163,11 +183,11 @@ namespace
 			{
 				if (!itemType)
 				{
-					PCL_WarnLog("MetalFarm entry '{}' unresolved itemTypePath '{}'", ToWideString(entry.id), ToWideString(entry.itemTypePath));
+					PCL_WarnLog("MetalFarm entry '{}' unresolved inputItemPath '{}'", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
 				}
 				if (!resonatableData)
 				{
-					PCL_WarnLog("MetalFarm entry '{}' unresolved resonatableDataPath '{}'", ToWideString(entry.id), ToWideString(entry.resonatableDataPath));
+					PCL_WarnLog("MetalFarm entry '{}' unresolved resonatable data (clone+outputs or fallback path '{}').", ToWideString(entry.id), ToWideString(entry.resonatableDataPath));
 				}
 				if (!seedMaterial)
 				{
