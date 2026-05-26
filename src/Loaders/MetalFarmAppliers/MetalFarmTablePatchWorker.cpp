@@ -113,18 +113,77 @@ namespace
 		return candidates;
 	}
 
-	auto ResolveObject(const std::string& objectPath) -> UObject*
+	auto ResolveObjectCandidates(const std::string& objectPath) -> std::vector<UObject*>
 	{
+		std::vector<UObject*> resolvedCandidates{};
+
 		for (const auto& candidatePath : BuildObjectPathCandidates(objectPath))
 		{
 			const auto widePath = ToWideString(candidatePath);
-			if (auto* resolved = UObjectGlobals::StaticFindObject(nullptr, nullptr, widePath.c_str()))
+			auto* resolved = UObjectGlobals::StaticFindObject(nullptr, nullptr, widePath.c_str());
+			if (!resolved)
 			{
-				return resolved;
+				continue;
+			}
+
+			bool alreadyPresent = false;
+			for (const auto* existing : resolvedCandidates)
+			{
+				if (existing == resolved)
+				{
+					alreadyPresent = true;
+					break;
+				}
+			}
+
+			if (!alreadyPresent)
+			{
+				resolvedCandidates.emplace_back(resolved);
 			}
 		}
 
-		return nullptr;
+		return resolvedCandidates;
+	}
+
+	auto AddUniqueObject(std::vector<UObject*>& objects, UObject* candidate) -> void
+	{
+		if (!candidate)
+		{
+			return;
+		}
+
+		for (const auto* existing : objects)
+		{
+			if (existing == candidate)
+			{
+				return;
+			}
+		}
+
+		objects.emplace_back(candidate);
+	}
+
+	auto ExpandItemTypeKeyCandidates(const std::vector<UObject*>& baseCandidates) -> std::vector<UObject*>
+	{
+		std::vector<UObject*> expanded{};
+
+		for (auto* itemTypeObject : baseCandidates)
+		{
+			AddUniqueObject(expanded, itemTypeObject);
+
+			if (itemTypeObject && itemTypeObject->GetClassPrivate())
+			{
+				auto* itemTypeClass = static_cast<UObject*>(itemTypeObject->GetClassPrivate());
+				AddUniqueObject(expanded, itemTypeClass);
+
+				if (itemTypeObject->GetClassPrivate()->GetClassDefaultObject())
+				{
+					AddUniqueObject(expanded, itemTypeObject->GetClassPrivate()->GetClassDefaultObject());
+				}
+			}
+		}
+
+		return expanded;
 	}
 
 	auto PatchSeedMap(
@@ -153,10 +212,11 @@ namespace
 
 		auto* seedMap = reinterpret_cast<TMap<UObject*, MetalFarmSeedData>*>(mapValue);
 		bool patchedAnyEntry = false;
+		bool failedAnyEntry = false;
 
 		for (const auto& entry : entries)
 		{
-			const auto itemType = ResolveObject(entry.GetInputItemPath());
+			const auto itemTypeCandidates = ExpandItemTypeKeyCandidates(ResolveObjectCandidates(entry.GetInputItemPath()));
 			auto* resonatableData = static_cast<UObject*>(nullptr);
 			if (!entry.outputs.empty())
 			{
@@ -173,15 +233,25 @@ namespace
 
 			if (!resonatableData)
 			{
-				resonatableData = ResolveObject(entry.resonatableDataPath);
+				const auto resonatableCandidates = ResolveObjectCandidates(entry.resonatableDataPath);
+				if (!resonatableCandidates.empty())
+				{
+					resonatableData = resonatableCandidates.front();
+				}
 			}
 
-			const auto seedMaterial = ResolveObject(entry.seedMaterialPath);
-			const auto metalTierTagName = FName(ToWideString(entry.metalTierTag).c_str(), FNAME_Find);
-
-			if (!itemType || !resonatableData || !seedMaterial)
+			UObject* seedMaterial = nullptr;
+			const auto seedMaterialCandidates = ResolveObjectCandidates(entry.seedMaterialPath);
+			if (!seedMaterialCandidates.empty())
 			{
-				if (!itemType)
+				seedMaterial = seedMaterialCandidates.front();
+			}
+			const auto metalTierTagName = FName(ToWideString(entry.metalTierTag).c_str(), FNAME_Add);
+
+			if (itemTypeCandidates.empty() || !resonatableData || !seedMaterial)
+			{
+				failedAnyEntry = true;
+				if (itemTypeCandidates.empty())
 				{
 					PCL_WarnLog("MetalFarm entry '{}' unresolved inputItemPath '{}'", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
 				}
@@ -199,6 +269,7 @@ namespace
 
 			if (metalTierTagName == FName())
 			{
+				failedAnyEntry = true;
 				PCL_WarnLog("MetalFarm entry '{}' unresolved metalTierTag '{}'; skipping entry.", ToWideString(entry.id), ToWideString(entry.metalTierTag));
 				continue;
 			}
@@ -207,53 +278,34 @@ namespace
 			// MetalFarmSeedData is not a UPROPERTY struct so the GC cannot trace
 			// the raw UObject* fields inside the map value; without rooting them
 			// the GC will dangling-pointer crash ~60 seconds into gameplay.
-			itemType->SetRootSet();
 			resonatableData->SetRootSet();
 			seedMaterial->SetRootSet();
 
-			auto& seedData = seedMap->FindOrAdd(itemType);
-			seedData.ResonatableData = resonatableData;
-			seedData.SeedMaterial = seedMaterial;
-			seedData.MetalTier = metalTierTagName;
-			PCL_VerboseLog(
-				"MetalFarm '{}' patched {} key='{}' resonatable='{}' seedMaterial='{}' metalTier='{}'.",
-				ToWideString(entry.id),
-				mapPropertyName,
-				itemType->GetFullName(),
-				resonatableData->GetFullName(),
-				seedMaterial->GetFullName(),
-				ToWideString(entry.metalTierTag));
+			for (auto* itemType : itemTypeCandidates)
+			{
+				if (!itemType)
+				{
+					continue;
+				}
+
+				itemType->SetRootSet();
+
+				auto& seedData = seedMap->FindOrAdd(itemType);
+				seedData.ResonatableData = resonatableData;
+				seedData.SeedMaterial = seedMaterial;
+				seedData.MetalTier = metalTierTagName;
+			}
 			patchedAnyEntry = true;
 		}
 
-		return patchedAnyEntry;
-	}
-
-	auto InspectSeedMap(
-		UObject* container,
-		const wchar_t* mapPropertyName,
-		UObject* currentItemType,
-		int& outCount,
-		bool& outHasCurrent) -> void
-	{
-		outCount = -1;
-		outHasCurrent = false;
-
-		if (!container)
+		if (!patchedAnyEntry)
 		{
-			return;
+			return false;
 		}
 
-		if (auto* mapProperty = CastField<FMapProperty>(container->GetPropertyByNameInChain(mapPropertyName)))
-		{
-			if (auto* mapValue = mapProperty->ContainerPtrToValuePtr<void>(container))
-			{
-				auto* seedMap = reinterpret_cast<TMap<UObject*, MetalFarmSeedData>*>(mapValue);
-				outCount = seedMap->Num();
-				outHasCurrent = currentItemType && seedMap->Find(currentItemType) != nullptr;
-			}
-		}
+		return !failedAnyEntry;
 	}
+
 }
 
 namespace MFM::Loader
@@ -270,23 +322,5 @@ namespace MFM::Loader
 		const std::vector<Config::MetalFarmAdditionEntry>& entries) -> bool
 	{
 		return PatchSeedMap(dataMap, STR("ItemTypeToMetalSeed"), entries);
-	}
-
-	auto MetalFarmTablePatchWorker::InspectItemTypeToSeedClass(
-		RC::Unreal::UObject* metalFarmInstance,
-		RC::Unreal::UObject* currentItemType,
-		int& outCount,
-		bool& outHasCurrent) -> void
-	{
-		InspectSeedMap(metalFarmInstance, STR("ItemTypeToSeedClass"), currentItemType, outCount, outHasCurrent);
-	}
-
-	auto MetalFarmTablePatchWorker::InspectItemTypeToMetalSeed(
-		RC::Unreal::UObject* dataMap,
-		RC::Unreal::UObject* currentItemType,
-		int& outCount,
-		bool& outHasCurrent) -> void
-	{
-		InspectSeedMap(dataMap, STR("ItemTypeToMetalSeed"), currentItemType, outCount, outHasCurrent);
 	}
 }

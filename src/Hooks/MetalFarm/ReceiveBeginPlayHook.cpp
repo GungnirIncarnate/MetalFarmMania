@@ -47,7 +47,7 @@ namespace
 		return IsTargetMetalFarm(context);
 	}
 
-	auto OnProcessEvent([[maybe_unused]] Hook::TCallbackIterationData<void>& callbackData, UObject* context, UFunction* function, void* params) -> void
+	auto OnProcessEvent([[maybe_unused]] Hook::TCallbackIterationData<void>& callbackData, UObject* context, UFunction* function, [[maybe_unused]] void* params) -> void
 	{
 		if (!IsTrackedMetalFarmEvent(context, function))
 		{
@@ -56,11 +56,12 @@ namespace
 
 		try
 		{
-			PCL_Log("MetalFarm trigger matched {} on {}.", function->GetName(), context->GetFullName());
-			MFM::Loader::MetalFarmTagApplier::TryApply(context);
-			MFM::Loader::MetalFarmTableApplier::TryApply(context);
-			MFM::Loader::MetalFarmTagApplier::LogDiagnostics(context);
-			MFM::Loader::MetalFarmTableApplier::LogDiagnostics(context);
+			const bool tagPatched = MFM::Loader::MetalFarmTagApplier::TryApply(context);
+			const bool tablePatched = MFM::Loader::MetalFarmTableApplier::TryApply(context);
+			if (!(tagPatched && tablePatched))
+			{
+				PCL_WarnLog("MetalFarm setup failed on {} (tagsPatched={}, tablesPatched={}).", context->GetFullName(), tagPatched, tablePatched);
+			}
 		}
 		catch (const std::exception& exception)
 		{
@@ -91,7 +92,5 @@ namespace MFM::Hooks
 			PCL_WarnLog("ReceiveBeginPlay hook registration failed.");
 			return;
 		}
-
-		PCL_Log("ReceiveBeginPlay hook installed.");
 	}
 }

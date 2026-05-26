@@ -15,8 +15,7 @@ namespace MFM::Loader
 	{
 	public:
 		static auto Initialize(std::vector<Config::MetalFarmAdditionEntry> entries) -> void;
-		static auto TryApply(RC::Unreal::UObject* metalFarmInstance) -> void;
-		static auto LogDiagnostics(RC::Unreal::UObject* metalFarmInstance) -> void;
+		static auto TryApply(RC::Unreal::UObject* metalFarmInstance) -> bool;
 
 	private:
 		static auto PatchInventoryFilter(RC::Unreal::UObject* metalFarmActor) -> bool;

@@ -153,10 +153,13 @@ namespace MFM::Loader::Config
 		}
 
 		const auto versionIt = root.find("schemaVersion");
-		if (versionIt == root.end() || !versionIt->is_number_integer() || versionIt->get<int>() != 2)
+		if (versionIt != root.end())
 		{
-			PCL_ErrorLog("Unsupported MetalFarm additions schemaVersion in {} (expected 2)", configPath.wstring());
-			return entries;
+			if (!versionIt->is_number_integer() || versionIt->get<int>() != 2)
+			{
+				PCL_ErrorLog("Unsupported MetalFarm additions schemaVersion in {} (expected 2)", configPath.wstring());
+				return entries;
+			}
 		}
 
 		const auto entriesIt = root.find("entries");
@@ -200,7 +203,6 @@ namespace MFM::Loader::Config
 			entries.emplace_back(std::move(entry));
 		}
 
-		PCL_Log("Loaded {} MetalFarm addition entries from {}", entries.size(), configPath.wstring());
 		return entries;
 	}
 }

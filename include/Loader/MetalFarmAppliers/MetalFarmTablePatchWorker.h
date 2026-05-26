@@ -23,17 +23,5 @@ namespace MFM::Loader
 		static auto PatchItemTypeToMetalSeed(
 			RC::Unreal::UObject* dataMap,
 			const std::vector<Config::MetalFarmAdditionEntry>& entries) -> bool;
-
-		static auto InspectItemTypeToSeedClass(
-			RC::Unreal::UObject* metalFarmInstance,
-			RC::Unreal::UObject* currentItemType,
-			int& outCount,
-			bool& outHasCurrent) -> void;
-
-		static auto InspectItemTypeToMetalSeed(
-			RC::Unreal::UObject* dataMap,
-			RC::Unreal::UObject* currentItemType,
-			int& outCount,
-			bool& outHasCurrent) -> void;
 	};
 }

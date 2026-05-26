@@ -14,7 +14,6 @@
 namespace
 {
 	constexpr const char* kBaseResonatableTemplatePath = "/Game/Data/Resonatable/DA_MetalFarm_CopperDeposit_ResonatableData.DA_MetalFarm_CopperDeposit_ResonatableData";
-	constexpr const wchar_t* kTransientOuterPathQualified = STR("/Engine/Transient.Transient");
 
 	std::unordered_map<std::string, RC::Unreal::UObject*> g_clonesByEntryId{};
 
@@ -142,32 +141,12 @@ namespace
 
 	auto FindCloneOuter(RC::Unreal::UObject* baseTemplate) -> RC::Unreal::UObject*
 	{
-		try
+		if (!baseTemplate)
 		{
-			if (auto* transientOuter = RC::Unreal::UObjectGlobals::StaticFindObject(nullptr, nullptr, kTransientOuterPathQualified))
-			{
-				return transientOuter;
-			}
-		}
-		catch (const std::exception& exception)
-		{
-			PCL_WarnLog("Resonable material transient outer lookup threw: {}", ToWideString(exception.what()));
-		}
-		catch (...)
-		{
-			PCL_WarnLog("Resonable material transient outer lookup threw: unknown exception.");
+			return nullptr;
 		}
 
-		// Fallback: use the template asset's outer package so clone construction can proceed.
-		if (baseTemplate && baseTemplate->GetOuterPrivate())
-		{
-			PCL_WarnLog(
-				"Resonable material transient outer was unavailable; using template outer '{}' for clone construction.",
-				baseTemplate->GetOuterPrivate()->GetFullName());
-			return baseTemplate->GetOuterPrivate();
-		}
-
-		return nullptr;
+		return baseTemplate->GetOuterPrivate();
 	}
 }
 

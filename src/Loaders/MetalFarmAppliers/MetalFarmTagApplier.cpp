@@ -127,10 +127,7 @@ namespace
 			}
 
 			const int32 addedCount = MergeTagNames(*itemTypeTagContainer, {mineralTagName});
-			if (addedCount > 0)
-			{
-				PCL_Log("MetalFarm registered '{}' as a native mineral seed item by tagging {} with ItemType.Mineral.", ToWideString(entry.id), itemType->GetFullName());
-			}
+			(void)addedCount;
 		}
 	}
 }
@@ -173,7 +170,6 @@ namespace MFM::Loader
 		if (!allowAnyItemsProperty->GetPropertyValueInContainer(inventoryComponent))
 		{
 			allowAnyItemsProperty->SetPropertyValueInContainer(inventoryComponent, true);
-			PCL_Log("MetalFarm inventory filter bypass enabled (AllowAddingAnyItems=true) on {}.", inventoryComponent->GetFullName());
 		}
 
 		PatchConfiguredItemTypeTags(s_entries);
@@ -186,88 +182,29 @@ namespace MFM::Loader
 
 		if (auto* inventoryAllowedTags = FindGameplayTagContainerValue(inventoryComponent, {STR("AllowedTags")}))
 		{
-			const auto beforeCount = inventoryAllowedTags->GameplayTags.Num();
-			const int32 addedCount = MergeTagNames(*inventoryAllowedTags, discoveredTagNames);
-			const auto afterCount = inventoryAllowedTags->GameplayTags.Num();
-			if (addedCount > 0)
-			{
-				PCL_Log("MetalFarm inventory AllowedTags merged {} configured item tags on {} ({} -> {}).", addedCount, inventoryComponent->GetFullName(), beforeCount, afterCount);
-			}
+			MergeTagNames(*inventoryAllowedTags, discoveredTagNames);
 		}
 
 		if (auto* actorAllowedItemTags = FindGameplayTagContainerValue(metalFarmActor, {STR("AllowedItemTags")}))
 		{
-			const int32 addedCount = MergeTagNames(*actorAllowedItemTags, discoveredTagNames);
-			if (addedCount > 0)
-			{
-				PCL_Log("MetalFarm actor AllowedItemTags merged {} configured item tags on {}.", addedCount, metalFarmActor->GetFullName());
-			}
+			MergeTagNames(*actorAllowedItemTags, discoveredTagNames);
 		}
 
 		return true;
 	}
 
-	auto MetalFarmTagApplier::TryApply(UObject* metalFarmInstance) -> void
+	auto MetalFarmTagApplier::TryApply(UObject* metalFarmInstance) -> bool
 	{
 		if (s_entries.empty())
 		{
-			return;
+			return false;
 		}
 
 		if (!IsTargetMetalFarm(metalFarmInstance))
 		{
-			return;
+			return false;
 		}
 
-		(void)PatchInventoryFilter(metalFarmInstance);
-	}
-
-	auto MetalFarmTagApplier::LogDiagnostics(UObject* metalFarmInstance) -> void
-	{
-		if (!metalFarmInstance || !IsTargetMetalFarm(metalFarmInstance))
-		{
-			return;
-		}
-
-		auto* inventoryComponentProperty = CastField<FObjectProperty>(metalFarmInstance->GetPropertyByNameInChain(STR("InventoryComponent")));
-		auto* inventoryComponent = inventoryComponentProperty ? *inventoryComponentProperty->ContainerPtrToValuePtr<UObject*>(metalFarmInstance) : nullptr;
-		if (!inventoryComponent)
-		{
-			PCL_WarnLog("MetalFarm tag diagnostics: actor='{}' has null InventoryComponent.", metalFarmInstance->GetFullName());
-			return;
-		}
-
-		bool allowAnyItems = false;
-		if (auto* allowAnyItemsProperty = CastField<FBoolProperty>(inventoryComponent->GetPropertyByNameInChain(STR("AllowAddingAnyItems"))))
-		{
-			allowAnyItems = allowAnyItemsProperty->GetPropertyValueInContainer(inventoryComponent);
-		}
-
-		int32 inventoryAllowedTagsCount = -1;
-		if (auto* inventoryAllowedTags = FindGameplayTagContainerValue(inventoryComponent, {STR("AllowedTags")}))
-		{
-			inventoryAllowedTagsCount = inventoryAllowedTags->GameplayTags.Num();
-		}
-
-		int32 actorAllowedItemTagsCount = -1;
-		if (auto* actorAllowedItemTags = FindGameplayTagContainerValue(metalFarmInstance, {STR("AllowedItemTags")}))
-		{
-			actorAllowedItemTagsCount = actorAllowedItemTags->GameplayTags.Num();
-		}
-
-		auto* currentItemTypeProperty = CastField<FObjectProperty>(metalFarmInstance->GetPropertyByNameInChain(STR("CurrentItemType")));
-		auto* currentItemType = currentItemTypeProperty ? *currentItemTypeProperty->ContainerPtrToValuePtr<UObject*>(metalFarmInstance) : nullptr;
-		const auto currentItemTagNames = MFM::Tags::TagLookupHelper::CollectItemTypeTagNames(currentItemType);
-
-		PCL_Log(
-			"MetalFarm tag diagnostics: actor='{}' inventory='{}' allowAnyItems={} AllowedTags={} AllowedItemTags={} currentItemType='{}' currentItemTags={} configuredEntries={}.",
-			metalFarmInstance->GetFullName(),
-			inventoryComponent->GetFullName(),
-			allowAnyItems,
-			inventoryAllowedTagsCount,
-			actorAllowedItemTagsCount,
-			currentItemType ? currentItemType->GetFullName() : STR("<null>"),
-			currentItemTagNames.size(),
-			s_entries.size());
+		return PatchInventoryFilter(metalFarmInstance);
 	}
 }
