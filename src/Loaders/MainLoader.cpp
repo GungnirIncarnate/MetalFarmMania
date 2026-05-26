@@ -1,5 +1,6 @@
 #include "Loader/MainLoader.h"
 #include "Loader/Config/MetalFarmAdditionsConfigLoader.h"
+#include "Loader/MetalFarmTagApplicator.h"
 #include "Loader/MetalFarmTableApplier.h"
 #include "Hooks/ReceiveBeginPlayHook.h"
 #include "Logger/Logger.h"
@@ -13,6 +14,7 @@ namespace MFM::Loader
 		const auto entries = Config::MetalFarmAdditionsConfigLoader::LoadDefault();
 		PCL_Log("MetalFarm additions ready with {} entries.", entries.size());
 
+		MetalFarmTagApplicator::Initialize(entries);
 		MetalFarmTableApplier::Initialize(entries);
 		MFM::Hooks::ReceiveBeginPlayHook::Initialize();
 	}

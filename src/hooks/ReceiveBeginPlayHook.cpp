@@ -5,6 +5,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/Hooks/Hooks.hpp>
 
+#include "Loader/MetalFarmTagApplicator.h"
 #include "Loader/MetalFarmTableApplier.h"
 #include "Logger/Logger.h"
 
@@ -37,6 +38,7 @@ namespace
 		}
 
 		PCL_Log("MetalFarm trigger matched {} on {}.", function->GetName(), context->GetFullName());
+		MFM::Loader::MetalFarmTagApplicator::TryApply(context);
 		MFM::Loader::MetalFarmTableApplier::TryApply(context);
 	}
 }

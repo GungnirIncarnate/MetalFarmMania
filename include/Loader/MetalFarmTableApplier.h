@@ -23,7 +23,6 @@ namespace MFM::Loader
 	private:
 		static auto ApplyFromMetalFarm(RC::Unreal::UObject* metalFarmInstance) -> bool;
 		static auto PatchSeedMap(RC::Unreal::UObject* container, const wchar_t* mapPropertyName) -> bool;
-		static auto PatchInventoryFilter(RC::Unreal::UObject* metalFarmCDO) -> bool;
 		static auto ResolveObject(const std::string& objectPath) -> RC::Unreal::UObject*;
 
 		struct MetalFarmSeedData
@@ -37,6 +36,5 @@ namespace MFM::Loader
 		static inline bool s_hasApplied{false};
 		static inline bool s_hasPatchedSeedClassMap{false};
 		static inline bool s_hasPatchedMetalSeedMap{false};
-		static inline bool s_hasPatchedInventoryFilter{false};
 	};
 }

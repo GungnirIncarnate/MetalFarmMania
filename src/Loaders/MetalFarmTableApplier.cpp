@@ -1,7 +1,6 @@
 #include "Loader/MetalFarmTableApplier.h"
 
 #include <string>
-#include <initializer_list>
 
 #include <Unreal/Core/Containers/Map.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -14,17 +13,6 @@
 namespace
 {
 	using namespace RC::Unreal;
-
-	struct FGameplayTagLite
-	{
-		FName TagName{};
-	};
-
-	struct FGameplayTagContainerLite
-	{
-		TArray<FGameplayTagLite> GameplayTags{};
-		TArray<FGameplayTagLite> ParentTags{};
-	};
 
 	auto ToWideString(const std::string& value) -> std::wstring
 	{
@@ -75,89 +63,6 @@ namespace
 		return normalized;
 	}
 
-	auto IsGameplayTagContainerProperty(FStructProperty* property) -> bool
-	{
-		if (!property)
-		{
-			return false;
-		}
-
-		const auto structType = property->GetStruct();
-		return structType && structType->GetName() == STR("GameplayTagContainer");
-	}
-
-	auto IsGameplayTagProperty(FStructProperty* property) -> bool
-	{
-		if (!property)
-		{
-			return false;
-		}
-
-		const auto structType = property->GetStruct();
-		return structType && structType->GetName() == STR("GameplayTag");
-	}
-
-	auto FindGameplayTagContainerValue(UObject* object, std::initializer_list<const wchar_t*> candidatePropertyNames) -> FGameplayTagContainerLite*
-	{
-		if (!object)
-		{
-			return nullptr;
-		}
-
-		for (const auto* candidateName : candidatePropertyNames)
-		{
-			auto* structProperty = CastField<FStructProperty>(object->GetPropertyByNameInChain(candidateName));
-			if (!IsGameplayTagContainerProperty(structProperty))
-			{
-				continue;
-			}
-
-			return structProperty->ContainerPtrToValuePtr<FGameplayTagContainerLite>(object);
-		}
-
-		return nullptr;
-	}
-
-	auto HasTag(const FGameplayTagContainerLite& container, const FGameplayTagLite& tag) -> bool
-	{
-		for (const auto& existingTag : container.GameplayTags)
-		{
-			if (existingTag.TagName == tag.TagName)
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	auto AddTagIfMissing(FGameplayTagContainerLite& destination, const FGameplayTagLite& tag) -> bool
-	{
-		if (HasTag(destination, tag))
-		{
-			return false;
-		}
-
-		destination.GameplayTags.Add(tag);
-		return true;
-	}
-
-	auto MergeTagContainers(FGameplayTagContainerLite& destination, const FGameplayTagContainerLite& source) -> int32
-	{
-		int32 addedCount = 0;
-		for (const auto& tag : source.GameplayTags)
-		{
-			if (HasTag(destination, tag))
-			{
-				continue;
-			}
-
-			destination.GameplayTags.Add(tag);
-			++addedCount;
-		}
-
-		return addedCount;
-	}
 }
 
 namespace MFM::Loader
@@ -168,7 +73,6 @@ namespace MFM::Loader
 		s_hasApplied = false;
 		s_hasPatchedSeedClassMap = false;
 		s_hasPatchedMetalSeedMap = false;
-		s_hasPatchedInventoryFilter = false;
 	}
 
 	auto MetalFarmTableApplier::ResolveObject(const std::string& objectPath) -> UObject*
@@ -251,130 +155,9 @@ namespace MFM::Loader
 		return patchedAnyEntry;
 	}
 
-	auto MetalFarmTableApplier::PatchInventoryFilter(UObject* metalFarmActor) -> bool
-	{
-		if (!metalFarmActor)
-		{
-			return false;
-		}
-
-		auto* inventoryComponentProperty = CastField<FObjectProperty>(metalFarmActor->GetPropertyByNameInChain(STR("InventoryComponent")));
-		if (!inventoryComponentProperty)
-		{
-			PCL_WarnLog("MetalFarm inventory filter patch deferred because 'InventoryComponent' was not found on {}", metalFarmActor->GetFullName());
-			return false;
-		}
-
-		auto* inventoryComponent = *inventoryComponentProperty->ContainerPtrToValuePtr<UObject*>(metalFarmActor);
-		if (!inventoryComponent)
-		{
-			PCL_WarnLog("MetalFarm inventory filter patch deferred because BP_MetalFarm InventoryComponent is null.");
-			return false;
-		}
-
-		auto* allowAnyItemsProperty = CastField<FBoolProperty>(inventoryComponent->GetPropertyByNameInChain(STR("AllowAddingAnyItems")));
-		if (!allowAnyItemsProperty)
-		{
-			PCL_WarnLog("MetalFarm inventory filter patch skipped because 'AllowAddingAnyItems' was not found on {}", inventoryComponent->GetFullName());
-			return false;
-		}
-
-		if (!allowAnyItemsProperty->GetPropertyValueInContainer(inventoryComponent))
-		{
-			allowAnyItemsProperty->SetPropertyValueInContainer(inventoryComponent, true);
-			PCL_Log("MetalFarm inventory filter bypass enabled (AllowAddingAnyItems=true) on {}.", inventoryComponent->GetFullName());
-		}
-
-		const std::initializer_list<const wchar_t*> tagPropertyCandidates{
-			STR("Tags"),
-			STR("ItemTags"),
-			STR("GameplayTags"),
-			STR("AllowedTags"),
-			STR("RequiredTags")};
-
-		FGameplayTagContainerLite configuredItemTags{};
-		bool hasConfiguredItemTags = false;
-
-		for (const auto& entry : s_entries)
-		{
-			auto* itemType = ResolveObject(entry.itemTypePath);
-			if (!itemType)
-			{
-				continue;
-			}
-
-			if (auto* itemTags = FindGameplayTagContainerValue(itemType, tagPropertyCandidates))
-			{
-				hasConfiguredItemTags = true;
-				(void)MergeTagContainers(configuredItemTags, *itemTags);
-			}
-
-			auto* typeTagProperty = CastField<FStructProperty>(itemType->GetPropertyByNameInChain(STR("TypeTag")));
-			if (IsGameplayTagProperty(typeTagProperty))
-			{
-				auto* typeTag = typeTagProperty->ContainerPtrToValuePtr<FGameplayTagLite>(itemType);
-				if (typeTag && typeTag->TagName != FName())
-				{
-					hasConfiguredItemTags = true;
-					(void)AddTagIfMissing(configuredItemTags, *typeTag);
-				}
-			}
-
-			auto* tunableDataProperty = CastField<FObjectProperty>(itemType->GetPropertyByNameInChain(STR("TunableData")));
-			if (!tunableDataProperty)
-			{
-				continue;
-			}
-
-			auto* tunableData = *tunableDataProperty->ContainerPtrToValuePtr<UObject*>(itemType);
-			if (!tunableData)
-			{
-				continue;
-			}
-
-			if (auto* tunableDataTags = FindGameplayTagContainerValue(tunableData, tagPropertyCandidates))
-			{
-				hasConfiguredItemTags = true;
-				(void)MergeTagContainers(configuredItemTags, *tunableDataTags);
-			}
-		}
-
-		if (!hasConfiguredItemTags)
-		{
-			PCL_WarnLog("MetalFarm tag patch could not locate gameplay tags on configured item types; inventory may still reject non-mineral items.");
-		}
-
-		if (!hasConfiguredItemTags)
-		{
-			return true;
-		}
-
-		if (auto* inventoryAllowedTags = FindGameplayTagContainerValue(inventoryComponent, {STR("AllowedTags")}))
-		{
-			const auto beforeCount = inventoryAllowedTags->GameplayTags.Num();
-			const int32 addedCount = MergeTagContainers(*inventoryAllowedTags, configuredItemTags);
-			const auto afterCount = inventoryAllowedTags->GameplayTags.Num();
-			if (addedCount > 0)
-			{
-				PCL_Log("MetalFarm inventory AllowedTags merged {} configured item tags on {} ({} -> {}).", addedCount, inventoryComponent->GetFullName(), beforeCount, afterCount);
-			}
-		}
-
-		if (auto* actorAllowedItemTags = FindGameplayTagContainerValue(metalFarmActor, {STR("AllowedItemTags")}))
-		{
-			const int32 addedCount = MergeTagContainers(*actorAllowedItemTags, configuredItemTags);
-			if (addedCount > 0)
-			{
-				PCL_Log("MetalFarm actor AllowedItemTags merged {} configured item tags on {}.", addedCount, metalFarmActor->GetFullName());
-			}
-		}
-
-		return true;
-	}
-
 	auto MetalFarmTableApplier::ApplyFromMetalFarm(UObject* metalFarmInstance) -> bool
 	{
-		if (s_hasApplied || (s_hasPatchedSeedClassMap && s_hasPatchedMetalSeedMap && s_hasPatchedInventoryFilter))
+		if (s_hasApplied || (s_hasPatchedSeedClassMap && s_hasPatchedMetalSeedMap))
 		{
 			s_hasApplied = true;
 			return true;
@@ -447,10 +230,6 @@ namespace MFM::Loader
 		{
 			return;
 		}
-
-		// Patch the live actor's own InventoryComponent on every BeginPlay so
-		// every Metal Farm instance in the world receives the filter bypass.
-		PatchInventoryFilter(metalFarmInstance);
 
 		if (!s_hasApplied)
 		{

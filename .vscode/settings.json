@@ -1,0 +1,8 @@
+{
+  "git.ignoredRepositories": [
+    "deps/RE-UE4SS",
+    "deps/RE-UE4SS/deps/first/Unreal",
+    "deps/RE-UE4SS/deps/first/patternsleuth",
+    "deps/RE-UE4SS/deps/first/patternsleuth_bind"
+  ]
+}
