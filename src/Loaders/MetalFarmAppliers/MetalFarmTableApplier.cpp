@@ -1,6 +1,7 @@
-#include "Loader/MetalFarmTableApplier.h"
+#include "Loader/MetalFarmAppliers/MetalFarmTableApplier.h"
 
 #include <string>
+#include <vector>
 
 #include <Unreal/Core/Containers/Map.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
@@ -51,16 +52,66 @@ namespace
 			return normalized;
 		}
 
-		if (normalized.compare(dotIndex, 2, ".0") == 0)
+		return normalized;
+	}
+
+	auto BuildObjectPathCandidates(const std::string& objectPath) -> std::vector<std::string>
+	{
+		std::vector<std::string> candidates{};
+		if (objectPath.empty())
 		{
-			const auto assetName = normalized.substr(nameStart, dotIndex - nameStart);
-			if (!assetName.empty())
-			{
-				normalized = normalized.substr(0, dotIndex + 1) + assetName;
-			}
+			return candidates;
 		}
 
-		return normalized;
+		auto addCandidate = [&candidates](const std::string& candidate) -> void
+		{
+			if (candidate.empty())
+			{
+				return;
+			}
+
+			for (const auto& existing : candidates)
+			{
+				if (existing == candidate)
+				{
+					return;
+				}
+			}
+
+			candidates.emplace_back(candidate);
+		};
+
+		addCandidate(objectPath);
+
+		const auto normalized = NormalizeObjectPath(objectPath);
+		addCandidate(normalized);
+
+		const auto slashIndex = normalized.find_last_of('/');
+		const auto nameStart = (slashIndex == std::string::npos) ? 0 : slashIndex + 1;
+		const auto dotIndex = normalized.find('.', nameStart);
+		if (dotIndex == std::string::npos)
+		{
+			return candidates;
+		}
+
+		const auto assetName = normalized.substr(nameStart, dotIndex - nameStart);
+		const auto objectName = normalized.substr(dotIndex + 1);
+		if (assetName.empty() || objectName.empty())
+		{
+			return candidates;
+		}
+
+		if (objectName.size() > 2 && objectName.compare(objectName.size() - 2, 2, "_C") == 0)
+		{
+			addCandidate(normalized.substr(0, dotIndex + 1) + objectName.substr(0, objectName.size() - 2));
+		}
+
+		if (objectName == assetName + "_C")
+		{
+			addCandidate(normalized.substr(0, dotIndex + 1) + assetName);
+		}
+
+		return candidates;
 	}
 
 }
@@ -77,9 +128,16 @@ namespace MFM::Loader
 
 	auto MetalFarmTableApplier::ResolveObject(const std::string& objectPath) -> UObject*
 	{
-		const auto normalizedPath = NormalizeObjectPath(objectPath);
-		const auto widePath = ToWideString(normalizedPath);
-		return UObjectGlobals::StaticFindObject(nullptr, nullptr, widePath.c_str());
+		for (const auto& candidatePath : BuildObjectPathCandidates(objectPath))
+		{
+			const auto widePath = ToWideString(candidatePath);
+			if (auto* resolved = UObjectGlobals::StaticFindObject(nullptr, nullptr, widePath.c_str()))
+			{
+				return resolved;
+			}
+		}
+
+		return nullptr;
 	}
 
 	auto MetalFarmTableApplier::PatchSeedMap(UObject* container, const wchar_t* mapPropertyName) -> bool

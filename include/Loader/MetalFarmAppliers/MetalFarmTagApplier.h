@@ -11,7 +11,7 @@ namespace RC::Unreal
 
 namespace MFM::Loader
 {
-	class MetalFarmTagApplicator
+	class MetalFarmTagApplier
 	{
 	public:
 		static auto Initialize(std::vector<Config::MetalFarmAdditionEntry> entries) -> void;

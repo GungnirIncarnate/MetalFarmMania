@@ -1,4 +1,4 @@
-#include "Loader/MetalFarmTagApplicator.h"
+#include "Loader/MetalFarmAppliers/MetalFarmTagApplier.h"
 
 #include <initializer_list>
 
@@ -6,8 +6,8 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
-#include "Loader/MetalFarmItemTagLookup.h"
 #include "Logger/Logger.h"
+#include "Tags/TagLookupHelper.h"
 
 namespace
 {
@@ -99,12 +99,12 @@ namespace
 
 namespace MFM::Loader
 {
-	auto MetalFarmTagApplicator::Initialize(std::vector<Config::MetalFarmAdditionEntry> entries) -> void
+	auto MetalFarmTagApplier::Initialize(std::vector<Config::MetalFarmAdditionEntry> entries) -> void
 	{
 		s_entries = std::move(entries);
 	}
 
-	auto MetalFarmTagApplicator::PatchInventoryFilter(UObject* metalFarmActor) -> bool
+	auto MetalFarmTagApplier::PatchInventoryFilter(UObject* metalFarmActor) -> bool
 	{
 		if (!metalFarmActor)
 		{
@@ -138,7 +138,7 @@ namespace MFM::Loader
 			PCL_Log("MetalFarm inventory filter bypass enabled (AllowAddingAnyItems=true) on {}.", inventoryComponent->GetFullName());
 		}
 
-		const auto discoveredTagNames = MetalFarmItemTagLookup::CollectConfiguredItemTagNames(s_entries);
+		const auto discoveredTagNames = MFM::Tags::TagLookupHelper::CollectConfiguredItemTypeTagNames(s_entries);
 		if (discoveredTagNames.empty())
 		{
 			return true;
@@ -167,7 +167,7 @@ namespace MFM::Loader
 		return true;
 	}
 
-	auto MetalFarmTagApplicator::TryApply(UObject* metalFarmInstance) -> void
+	auto MetalFarmTagApplier::TryApply(UObject* metalFarmInstance) -> void
 	{
 		if (s_entries.empty())
 		{
