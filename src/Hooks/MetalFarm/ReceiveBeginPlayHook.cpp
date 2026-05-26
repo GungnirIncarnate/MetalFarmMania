@@ -13,7 +13,17 @@ namespace
 {
 	using namespace RC::Unreal;
 
-	auto IsReceiveBeginPlayForMetalFarm(UObject* context, UFunction* function) -> bool
+	auto IsTargetMetalFarm(const UObject* context) -> bool
+	{
+		if (!context || !context->GetClassPrivate())
+		{
+			return false;
+		}
+
+		return context->GetClassPrivate()->GetName() == STR("BP_MetalFarm_C");
+	}
+
+	auto IsTrackedMetalFarmEvent(UObject* context, UFunction* function) -> bool
 	{
 		if (!context || !function)
 		{
@@ -21,18 +31,21 @@ namespace
 		}
 
 		const auto functionName = function->GetName();
-		if (functionName != STR("ReceiveBeginPlay"))
+		if (functionName != STR("ReceiveBeginPlay") &&
+			functionName != STR("OnSeedAdded") &&
+			functionName != STR("OnSeedRemoved") &&
+			functionName != STR("OnSeedChanged") &&
+			functionName != STR("OnSeedSpawned"))
 		{
 			return false;
 		}
 
-		const auto objectClass = context->GetClassPrivate();
-		return objectClass && objectClass->GetName() == STR("BP_MetalFarm_C");
+		return IsTargetMetalFarm(context);
 	}
 
 	auto OnProcessEvent([[maybe_unused]] Hook::TCallbackIterationData<void>& callbackData, UObject* context, UFunction* function, void* params) -> void
 	{
-		if (!IsReceiveBeginPlayForMetalFarm(context, function))
+		if (!IsTrackedMetalFarmEvent(context, function))
 		{
 			return;
 		}
@@ -40,6 +53,8 @@ namespace
 		PCL_Log("MetalFarm trigger matched {} on {}.", function->GetName(), context->GetFullName());
 		MFM::Loader::MetalFarmTagApplier::TryApply(context);
 		MFM::Loader::MetalFarmTableApplier::TryApply(context);
+		MFM::Loader::MetalFarmTagApplier::LogDiagnostics(context);
+		MFM::Loader::MetalFarmTableApplier::LogDiagnostics(context);
 	}
 }
 

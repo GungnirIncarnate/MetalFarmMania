@@ -1,24 +1,16 @@
 #include "Loader/MetalFarmAppliers/MetalFarmTableApplier.h"
 
-#include <string>
-#include <vector>
-
-#include <Unreal/Core/Containers/Map.hpp>
 #include <Unreal/CoreUObject/UObject/Class.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
-#include <Unreal/UObjectGlobals.hpp>
 
+#include "Loader/MetalFarmAppliers/MetalFarmRuntimePatchState.h"
+#include "Loader/MetalFarmAppliers/MetalFarmTablePatchWorker.h"
 #include "Logger/Logger.h"
 
 namespace
 {
 	using namespace RC::Unreal;
-
-	auto ToWideString(const std::string& value) -> std::wstring
-	{
-		return {value.begin(), value.end()};
-	}
 
 	auto IsTargetMetalFarm(const UObject* metalFarmInstance) -> bool
 	{
@@ -30,90 +22,6 @@ namespace
 		return metalFarmInstance->GetClassPrivate()->GetName() == STR("BP_MetalFarm_C");
 	}
 
-	auto NormalizeObjectPath(const std::string& objectPath) -> std::string
-	{
-		if (objectPath.empty())
-		{
-			return objectPath;
-		}
-
-		auto normalized = objectPath;
-		const auto slashIndex = normalized.find_last_of('/');
-		const auto nameStart = (slashIndex == std::string::npos) ? 0 : slashIndex + 1;
-		const auto dotIndex = normalized.find('.', nameStart);
-
-		if (dotIndex == std::string::npos)
-		{
-			const auto assetName = normalized.substr(nameStart);
-			if (!assetName.empty())
-			{
-				normalized += "." + assetName;
-			}
-			return normalized;
-		}
-
-		return normalized;
-	}
-
-	auto BuildObjectPathCandidates(const std::string& objectPath) -> std::vector<std::string>
-	{
-		std::vector<std::string> candidates{};
-		if (objectPath.empty())
-		{
-			return candidates;
-		}
-
-		auto addCandidate = [&candidates](const std::string& candidate) -> void
-		{
-			if (candidate.empty())
-			{
-				return;
-			}
-
-			for (const auto& existing : candidates)
-			{
-				if (existing == candidate)
-				{
-					return;
-				}
-			}
-
-			candidates.emplace_back(candidate);
-		};
-
-		addCandidate(objectPath);
-
-		const auto normalized = NormalizeObjectPath(objectPath);
-		addCandidate(normalized);
-
-		const auto slashIndex = normalized.find_last_of('/');
-		const auto nameStart = (slashIndex == std::string::npos) ? 0 : slashIndex + 1;
-		const auto dotIndex = normalized.find('.', nameStart);
-		if (dotIndex == std::string::npos)
-		{
-			return candidates;
-		}
-
-		const auto assetName = normalized.substr(nameStart, dotIndex - nameStart);
-		const auto objectName = normalized.substr(dotIndex + 1);
-		if (assetName.empty() || objectName.empty())
-		{
-			return candidates;
-		}
-
-		if (objectName.size() > 2 && objectName.compare(objectName.size() - 2, 2, "_C") == 0)
-		{
-			addCandidate(normalized.substr(0, dotIndex + 1) + objectName.substr(0, objectName.size() - 2));
-		}
-
-		if (objectName == assetName + "_C")
-		{
-			addCandidate(normalized.substr(0, dotIndex + 1) + assetName);
-		}
-
-		return candidates;
-	}
-
 }
 
 namespace MFM::Loader
@@ -121,157 +29,72 @@ namespace MFM::Loader
 	auto MetalFarmTableApplier::Initialize(std::vector<Config::MetalFarmAdditionEntry> entries) -> void
 	{
 		s_entries = std::move(entries);
-		s_hasApplied = false;
-		s_hasPatchedSeedClassMap = false;
-		s_hasPatchedMetalSeedMap = false;
-	}
-
-	auto MetalFarmTableApplier::ResolveObject(const std::string& objectPath) -> UObject*
-	{
-		for (const auto& candidatePath : BuildObjectPathCandidates(objectPath))
-		{
-			const auto widePath = ToWideString(candidatePath);
-			if (auto* resolved = UObjectGlobals::StaticFindObject(nullptr, nullptr, widePath.c_str()))
-			{
-				return resolved;
-			}
-		}
-
-		return nullptr;
-	}
-
-	auto MetalFarmTableApplier::PatchSeedMap(UObject* container, const wchar_t* mapPropertyName) -> bool
-	{
-		if (!container)
-		{
-			return false;
-		}
-
-		auto* mapProperty = CastField<FMapProperty>(container->GetPropertyByNameInChain(mapPropertyName));
-		if (!mapProperty)
-		{
-			PCL_WarnLog("MetalFarm table patch skipped because '{}' was not found on {}", mapPropertyName, container->GetFullName());
-			return false;
-		}
-
-		auto* mapValue = mapProperty->ContainerPtrToValuePtr<void>(container);
-		if (!mapValue)
-		{
-			PCL_WarnLog("MetalFarm table patch skipped because '{}' has no value pointer on {}", mapPropertyName, container->GetFullName());
-			return false;
-		}
-
-		auto* seedMap = reinterpret_cast<TMap<UObject*, MetalFarmSeedData>*>(mapValue);
-		bool patchedAnyEntry = false;
-
-		for (const auto& entry : s_entries)
-		{
-			const auto itemType = ResolveObject(entry.itemTypePath);
-			const auto resonatableData = ResolveObject(entry.resonatableDataPath);
-			const auto seedMaterial = ResolveObject(entry.seedMaterialPath);
-			const auto metalTierTagName = FName(ToWideString(entry.metalTierTag).c_str(), FNAME_Find);
-
-			if (!itemType || !resonatableData || !seedMaterial)
-			{
-				if (!itemType)
-				{
-					PCL_WarnLog("MetalFarm entry '{}' unresolved itemTypePath '{}'", ToWideString(entry.id), ToWideString(entry.itemTypePath));
-				}
-				if (!resonatableData)
-				{
-					PCL_WarnLog("MetalFarm entry '{}' unresolved resonatableDataPath '{}'", ToWideString(entry.id), ToWideString(entry.resonatableDataPath));
-				}
-				if (!seedMaterial)
-				{
-					PCL_WarnLog("MetalFarm entry '{}' unresolved seedMaterialPath '{}'", ToWideString(entry.id), ToWideString(entry.seedMaterialPath));
-				}
-				PCL_WarnLog("Skipping MetalFarm entry '{}' because one or more referenced objects could not be resolved.", ToWideString(entry.id));
-				continue;
-			}
-
-			if (metalTierTagName == FName())
-			{
-				PCL_WarnLog("MetalFarm entry '{}' unresolved metalTierTag '{}'; skipping entry.", ToWideString(entry.id), ToWideString(entry.metalTierTag));
-				continue;
-			}
-
-			// Root all three objects so UE's garbage collector doesn't free them.
-			// MetalFarmSeedData is not a UPROPERTY struct so the GC cannot trace
-			// the raw UObject* fields inside the map value; without rooting them
-			// the GC will dangling-pointer crash ~60 seconds into gameplay.
-			itemType->SetRootSet();
-			resonatableData->SetRootSet();
-			seedMaterial->SetRootSet();
-
-			auto& seedData = seedMap->FindOrAdd(itemType);
-			seedData.ResonatableData = resonatableData;
-			seedData.SeedMaterial = seedMaterial;
-			seedData.MetalTier = metalTierTagName;
-			patchedAnyEntry = true;
-		}
-
-		return patchedAnyEntry;
+		MetalFarmRuntimePatchState::Reset();
 	}
 
 	auto MetalFarmTableApplier::ApplyFromMetalFarm(UObject* metalFarmInstance) -> bool
 	{
-		if (s_hasApplied || (s_hasPatchedSeedClassMap && s_hasPatchedMetalSeedMap))
-		{
-			s_hasApplied = true;
-			return true;
-		}
-
 		if (!IsTargetMetalFarm(metalFarmInstance))
 		{
 			return false;
 		}
 
-		const auto metalFarmClass = metalFarmInstance->GetClassPrivate();
-		const auto metalFarmCDO = metalFarmClass ? metalFarmClass->GetClassDefaultObject() : nullptr;
-		if (!metalFarmCDO)
-		{
-			PCL_WarnLog("MetalFarm table patch deferred because the BP_MetalFarm CDO is not available yet.");
-			return false;
-		}
-
-		auto* dataMapProperty = CastField<FObjectProperty>(metalFarmCDO->GetPropertyByNameInChain(STR("Data Map")));
+		auto* dataMapProperty = CastField<FObjectProperty>(metalFarmInstance->GetPropertyByNameInChain(STR("Data Map")));
 		if (!dataMapProperty)
 		{
-			PCL_WarnLog("MetalFarm table patch deferred because the BP_MetalFarm 'Data Map' property is not available yet.");
+			PCL_WarnLog("MetalFarm table patch deferred because the BP_MetalFarm instance 'Data Map' property is not available yet.");
 			return false;
 		}
 
-		const auto dataMap = *dataMapProperty->ContainerPtrToValuePtr<UObject*>(metalFarmCDO);
+		const auto dataMap = *dataMapProperty->ContainerPtrToValuePtr<UObject*>(metalFarmInstance);
 		if (!dataMap)
 		{
-			PCL_WarnLog("MetalFarm table patch deferred because the BP_MetalFarm 'Data Map' value is still null.");
+			PCL_WarnLog("MetalFarm table patch deferred because the BP_MetalFarm instance 'Data Map' value is still null.");
 			return false;
 		}
 
-		if (!s_hasPatchedSeedClassMap)
+		const bool hasSeedClassPatch = MetalFarmRuntimePatchState::HasSeedClassPatch(metalFarmInstance);
+		const bool hasMetalSeedPatch = MetalFarmRuntimePatchState::HasMetalSeedPatch(dataMap);
+
+		bool patchedSeedClassNow = false;
+		if (!hasSeedClassPatch)
 		{
-			s_hasPatchedSeedClassMap = PatchSeedMap(metalFarmCDO, STR("ItemTypeToSeedClass"));
+			patchedSeedClassNow = MetalFarmTablePatchWorker::PatchItemTypeToSeedClass(metalFarmInstance, s_entries);
+			if (patchedSeedClassNow)
+			{
+				MetalFarmRuntimePatchState::MarkSeedClassPatched(metalFarmInstance);
+			}
 		}
 
-		if (!s_hasPatchedMetalSeedMap)
+		bool patchedMetalSeedNow = false;
+		if (!hasMetalSeedPatch)
 		{
-			s_hasPatchedMetalSeedMap = PatchSeedMap(dataMap, STR("ItemTypeToMetalSeed"));
+			patchedMetalSeedNow = MetalFarmTablePatchWorker::PatchItemTypeToMetalSeed(dataMap, s_entries);
+			if (patchedMetalSeedNow)
+			{
+				MetalFarmRuntimePatchState::MarkMetalSeedPatched(dataMap);
+			}
 		}
 
-		if (s_hasPatchedSeedClassMap && s_hasPatchedMetalSeedMap)
+		const bool seedClassPatched = hasSeedClassPatch || patchedSeedClassNow;
+		const bool metalSeedPatched = hasMetalSeedPatch || patchedMetalSeedNow;
+
+		if (seedClassPatched && metalSeedPatched)
 		{
-			s_hasApplied = true;
-			PCL_Log("MetalFarm tables patched from ReceiveBeginPlay using {} configured entries.", s_entries.size());
+			if (patchedSeedClassNow || patchedMetalSeedNow)
+			{
+				PCL_Log("MetalFarm tables patched for actor '{}' using {} configured entries.", metalFarmInstance->GetFullName(), s_entries.size());
+			}
 			return true;
 		}
 
-		if (s_hasPatchedSeedClassMap || s_hasPatchedMetalSeedMap)
+		if (seedClassPatched || metalSeedPatched)
 		{
-			PCL_Log("MetalFarm partially patched and is still waiting on remaining maps after a trigger.");
+			PCL_Log("MetalFarm partially patched for actor '{}' and is still waiting on remaining maps after a trigger.", metalFarmInstance->GetFullName());
 		}
 		else
 		{
-			PCL_WarnLog("MetalFarm patch is still waiting for table map properties to be available after a trigger.");
+			PCL_WarnLog("MetalFarm patch is still waiting for table map properties to be available after a trigger on actor '{}'.", metalFarmInstance->GetFullName());
 		}
 
 		return false;
@@ -289,9 +112,59 @@ namespace MFM::Loader
 			return;
 		}
 
-		if (!s_hasApplied)
+		(void)ApplyFromMetalFarm(metalFarmInstance);
+	}
+
+	auto MetalFarmTableApplier::LogDiagnostics(UObject* metalFarmInstance) -> void
+	{
+		if (!metalFarmInstance || !IsTargetMetalFarm(metalFarmInstance))
 		{
-			(void)ApplyFromMetalFarm(metalFarmInstance);
+			return;
 		}
+
+		auto* currentItemTypeProperty = CastField<FObjectProperty>(metalFarmInstance->GetPropertyByNameInChain(STR("CurrentItemType")));
+		const auto currentItemType = currentItemTypeProperty ? *currentItemTypeProperty->ContainerPtrToValuePtr<UObject*>(metalFarmInstance) : nullptr;
+
+		int32 seedGrowerCount = -1;
+		if (auto* seedGrowerComponentsProperty = CastField<FArrayProperty>(metalFarmInstance->GetPropertyByNameInChain(STR("SeedGrowerComponents"))))
+		{
+			if (auto* seedGrowers = seedGrowerComponentsProperty->ContainerPtrToValuePtr<TArray<UObject*>>(metalFarmInstance))
+			{
+				seedGrowerCount = seedGrowers->Num();
+			}
+		}
+
+		int seedClassMapCount = -1;
+		bool seedClassHasCurrent = false;
+		MetalFarmTablePatchWorker::InspectItemTypeToSeedClass(metalFarmInstance, currentItemType, seedClassMapCount, seedClassHasCurrent);
+
+		int metalSeedMapCount = -1;
+		bool metalSeedHasCurrent = false;
+		auto dataMap = static_cast<UObject*>(nullptr);
+		if (auto* dataMapProperty = CastField<FObjectProperty>(metalFarmInstance->GetPropertyByNameInChain(STR("Data Map"))))
+		{
+			dataMap = *dataMapProperty->ContainerPtrToValuePtr<UObject*>(metalFarmInstance);
+		}
+
+		if (dataMap)
+		{
+			MetalFarmTablePatchWorker::InspectItemTypeToMetalSeed(dataMap, currentItemType, metalSeedMapCount, metalSeedHasCurrent);
+		}
+
+		const bool seedClassPatched = MetalFarmRuntimePatchState::HasSeedClassPatch(metalFarmInstance);
+		const bool metalSeedPatched = MetalFarmRuntimePatchState::HasMetalSeedPatch(dataMap);
+
+		PCL_Log(
+			"MetalFarm diagnostics: actor='{}' currentItemType='{}' seedGrowers={} ItemTypeToSeedClass(count={}, hasCurrent={}) ItemTypeToMetalSeed(count={}, hasCurrent={}) entries={} seedClassPatched={} metalSeedPatched={}.",
+			metalFarmInstance->GetFullName(),
+			currentItemType ? currentItemType->GetFullName() : STR("<null>"),
+			seedGrowerCount,
+			seedClassMapCount,
+			seedClassHasCurrent,
+			metalSeedMapCount,
+			metalSeedHasCurrent,
+			s_entries.size(),
+			seedClassPatched,
+			metalSeedPatched);
 	}
 }

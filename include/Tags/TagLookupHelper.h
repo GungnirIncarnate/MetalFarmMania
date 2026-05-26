@@ -18,6 +18,9 @@ namespace MFM::Tags
 	class TagLookupHelper
 	{
 	public:
+		// Resolve item type UObject by object path (supports configured path formats).
+		static auto ResolveItemTypeFromPath(const std::string& itemTypePath) -> RC::Unreal::UObject*;
+
 		// Preferred generic API: pass any resolved UUWEItemType UObject.
 		static auto CollectItemTypeTagNames(RC::Unreal::UObject* itemType) -> std::vector<RC::Unreal::FName>;
 

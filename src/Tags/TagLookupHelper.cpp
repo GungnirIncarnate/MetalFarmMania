@@ -203,6 +203,11 @@ namespace
 
 namespace MFM::Tags
 {
+	auto TagLookupHelper::ResolveItemTypeFromPath(const std::string& itemTypePath) -> UObject*
+	{
+		return ResolveObject(itemTypePath);
+	}
+
 	auto TagLookupHelper::CollectItemTypeTagNames(UObject* itemType) -> std::vector<FName>
 	{
 		const std::initializer_list<const wchar_t*> tagPropertyCandidates{
