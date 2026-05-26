@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,7 @@ namespace MFM::Loader::Config
 		std::string id;
 		std::string inputItemPath;
 		std::string growthSpeed;
+		std::optional<float> growthTimeSeconds;
 		std::vector<MetalFarmOutputEntry> outputs;
 
 		// Legacy/internal fields retained for compatibility with the existing patch flow.

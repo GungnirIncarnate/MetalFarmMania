@@ -17,6 +17,21 @@ namespace
 {
 	using namespace RC::Unreal;
 
+		struct FGameplayTagLite
+		{
+			FName TagName{};
+
+			auto operator==(const FGameplayTagLite& other) const -> bool
+			{
+				return TagName == other.TagName;
+			}
+		};
+
+		auto GetTypeHash(const FGameplayTagLite& value) -> uint32
+		{
+			return GetTypeHash(value.TagName);
+		}
+
 	struct MetalFarmSeedData
 	{
 		UObject* ResonatableData{};
@@ -186,6 +201,71 @@ namespace
 		return expanded;
 	}
 
+	auto ResolveFarmingSettingsObject() -> UObject*
+	{
+		constexpr const wchar_t* kFarmingSettingsObjectPath = STR("/Script/UWEFarming.Default__UWEFarmingSettings");
+		auto* settingsObject = UObjectGlobals::StaticFindObject(nullptr, nullptr, kFarmingSettingsObjectPath);
+		if (!settingsObject)
+		{
+			return nullptr;
+		}
+
+		auto* tierMapProperty = CastField<FMapProperty>(settingsObject->GetPropertyByNameInChain(STR("SeedGrowerTierTagToRipeningTime")));
+		if (!tierMapProperty)
+		{
+			return nullptr;
+		}
+
+		return settingsObject;
+	}
+
+	auto TryApplyCustomGrowthTierTime(
+		UObject* farmingSettingsObject,
+		const std::string& metalTierTag,
+		float growthTimeSeconds) -> bool
+	{
+		if (!farmingSettingsObject)
+		{
+			return false;
+		}
+
+		auto* tierMapProperty = CastField<FMapProperty>(farmingSettingsObject->GetPropertyByNameInChain(STR("SeedGrowerTierTagToRipeningTime")));
+		if (!tierMapProperty)
+		{
+			return false;
+		}
+
+		auto* mapValue = tierMapProperty->ContainerPtrToValuePtr<void>(farmingSettingsObject);
+		if (!mapValue)
+		{
+			return false;
+		}
+
+		const auto customTagName = FName(ToWideString(metalTierTag).c_str(), FNAME_Add);
+		if (customTagName == FName())
+		{
+			return false;
+		}
+
+		if (CastField<FFloatProperty>(tierMapProperty->GetValueProp()))
+		{
+			auto* tierMap = reinterpret_cast<TMap<FGameplayTagLite, float>*>(mapValue);
+			auto& tunedValue = tierMap->FindOrAdd(FGameplayTagLite{customTagName});
+			tunedValue = growthTimeSeconds;
+			return true;
+		}
+
+		if (CastField<FDoubleProperty>(tierMapProperty->GetValueProp()))
+		{
+			auto* tierMap = reinterpret_cast<TMap<FGameplayTagLite, double>*>(mapValue);
+			auto& tunedValue = tierMap->FindOrAdd(FGameplayTagLite{customTagName});
+			tunedValue = static_cast<double>(growthTimeSeconds);
+			return true;
+		}
+
+		return false;
+	}
+
 	auto PatchSeedMap(
 		UObject* container,
 		const wchar_t* mapPropertyName,
@@ -211,12 +291,32 @@ namespace
 		}
 
 		auto* seedMap = reinterpret_cast<TMap<UObject*, MetalFarmSeedData>*>(mapValue);
+		auto* farmingSettingsObject = ResolveFarmingSettingsObject();
 		bool patchedAnyEntry = false;
 		bool failedAnyEntry = false;
 
 		for (const auto& entry : entries)
 		{
-			const auto itemTypeCandidates = ExpandItemTypeKeyCandidates(ResolveObjectCandidates(entry.GetInputItemPath()));
+			const auto resolvedItemTypeCandidates = ResolveObjectCandidates(entry.GetInputItemPath());
+			const auto itemTypeCandidates = ExpandItemTypeKeyCandidates(resolvedItemTypeCandidates);
+
+			if (entry.growthTimeSeconds.has_value())
+			{
+				const bool appliedCustomGrowthTime = TryApplyCustomGrowthTierTime(
+					farmingSettingsObject,
+					entry.metalTierTag,
+					*entry.growthTimeSeconds);
+
+				if (!appliedCustomGrowthTime)
+				{
+					PCL_WarnLog(
+						"MetalFarm entry '{}' could not apply custom growthTimeSeconds {} to UUWEFarmingSettings tier map; continuing with metalTierTag '{}' default behavior.",
+						ToWideString(entry.id),
+						*entry.growthTimeSeconds,
+						ToWideString(entry.metalTierTag));
+				}
+			}
+
 			auto* resonatableData = static_cast<UObject*>(nullptr);
 			if (!entry.outputs.empty())
 			{

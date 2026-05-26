@@ -1,5 +1,6 @@
 #include "Loader/Config/MetalFarmAdditionsConfigLoader.h"
 
+#include <cctype>
 #include <fstream>
 #include <sstream>
 
@@ -27,6 +28,31 @@ namespace
 		}
 
 		return "ItemType.TunableData.SeedGrowerTime.Medium";
+	}
+
+	auto BuildCustomSeedGrowerTimeTag(const std::string& entryId) -> std::string
+	{
+		std::string suffix{};
+		suffix.reserve(entryId.size());
+
+		for (const unsigned char ch : entryId)
+		{
+			if (std::isalnum(ch))
+			{
+				suffix.push_back(static_cast<char>(ch));
+			}
+			else
+			{
+				suffix.push_back('_');
+			}
+		}
+
+		if (suffix.empty())
+		{
+			suffix = "Entry";
+		}
+
+		return "ItemType.TunableData.SeedGrowerTime.MFM." + suffix;
 	}
 
 	auto ReadRequiredString(const json& object, const char* fieldName, std::string& outValue) -> bool
@@ -190,6 +216,27 @@ namespace MFM::Loader::Config
 
 			entry.growthSpeed = entryJson.value("growthSpeed", std::string{"medium"});
 			entry.metalTierTag = NormalizeGrowthSpeedToTierTag(entry.growthSpeed);
+
+			const auto growthTimeIt = entryJson.find("growthTimeSeconds");
+			if (growthTimeIt != entryJson.end())
+			{
+				if (!growthTimeIt->is_number())
+				{
+					PCL_WarnLog("Skipping MetalFarm entry #{} due to non-numeric growthTimeSeconds", index);
+					continue;
+				}
+
+				const auto parsedGrowthTimeSeconds = growthTimeIt->get<float>();
+				if (parsedGrowthTimeSeconds <= 0.0f)
+				{
+					PCL_WarnLog("Skipping MetalFarm entry #{} due to non-positive growthTimeSeconds", index);
+					continue;
+				}
+
+				entry.growthTimeSeconds = parsedGrowthTimeSeconds;
+				entry.metalTierTag = BuildCustomSeedGrowerTimeTag(entry.id);
+			}
+
 			entry.seedMaterialPath = kDefaultSeedMaterialPath;
 			entry.resonatableDataPath = kDefaultCopperResonatablePath;
 			entry.itemTypePath = entry.inputItemPath;
