@@ -124,3 +124,10 @@ You define entries in a JSONC config file (comments supported), and the mod patc
   - Verify each entry has id, inputItemPath, and valid outputs.
 - Parse/validation errors:
   - Check for invalid number types, missing required fields, or dropChance outside 0.0 to 1.0.
+
+## Known Bugs
+
+- Items that share the same gameplay tag can sometimes be inserted into a Metal Farm slot even when they are not the exact configured recipe input.
+- A full fix for this behavior has not been found yet.
+- If the inserted item is not exactly the configured input item, the Metal Farm will not progress or grow.
+- Example: if a recipe is configured for regular Fins, Improved Fins can still be inserted because of shared tags, but the farm will only grow when regular Fins are inserted.
