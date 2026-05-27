@@ -112,6 +112,13 @@ You define entries in a JSONC config file (comments supported), and the mod patc
 }
 ```
 
+## Multiplayer Notes
+
+- Only the host is required to have this mod for Metal Farms to produce the correct custom outputs.
+- With host-only install, only the host can insert custom configured input items into Metal Farms and see growth timers.
+- Any player can harvest the custom outputs once they are produced.
+- If other players also want to insert custom input items and see growth timers, they must install the mod too as both the item filter for the metal farms and timers are client-side
+
 ## Troubleshooting
 
 - Mod does not appear to load:
