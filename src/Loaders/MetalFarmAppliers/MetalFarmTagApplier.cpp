@@ -7,6 +7,7 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/UObject.hpp>
 
+#include "Loader/Config/FriendlyPathResolver.h"
 #include "Logger/Logger.h"
 #include "Tags/TagLookupHelper.h"
 
@@ -112,10 +113,11 @@ namespace
 
 		for (const auto& entry : entries)
 		{
-			auto* itemType = MFM::Tags::TagLookupHelper::ResolveItemTypeFromPath(entry.GetInputItemPath());
+			const auto resolvedInputPath = MFM::Loader::Config::FriendlyPathResolver::ResolveInputItemPath(entry.GetInputItemPath(), entry.id);
+			auto* itemType = MFM::Tags::TagLookupHelper::ResolveItemTypeFromPath(resolvedInputPath);
 			if (!itemType)
 			{
-				PCL_WarnLog("MetalFarm item-type seed registration skipped for '{}' because inputItemPath '{}' could not be resolved.", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
+				PCL_WarnLog("MetalFarm item-type seed registration skipped for '{}' because inputItemPath '{}' could not be resolved.", ToWideString(entry.id), ToWideString(resolvedInputPath));
 				continue;
 			}
 

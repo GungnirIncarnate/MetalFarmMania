@@ -8,6 +8,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "Loader/Config/FriendlyPathResolver.h"
 #include "Logger/Logger.h"
 
 namespace
@@ -262,10 +263,11 @@ namespace MFM::Tags
 
 		for (const auto& entry : entries)
 		{
-			const auto itemTypeTagNames = CollectItemTypeTagNamesFromPath(entry.GetInputItemPath());
+			const auto resolvedInputPath = MFM::Loader::Config::FriendlyPathResolver::ResolveInputItemPath(entry.GetInputItemPath(), entry.id);
+			const auto itemTypeTagNames = CollectItemTypeTagNamesFromPath(resolvedInputPath);
 			if (itemTypeTagNames.empty())
 			{
-				PCL_WarnLog("Tag lookup found no gameplay tags for entry '{}' inputItemPath '{}'.", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
+				PCL_WarnLog("Tag lookup found no gameplay tags for entry '{}' inputItemPath '{}'.", ToWideString(entry.id), ToWideString(resolvedInputPath));
 				continue;
 			}
 

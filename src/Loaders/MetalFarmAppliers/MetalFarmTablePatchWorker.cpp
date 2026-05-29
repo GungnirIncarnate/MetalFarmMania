@@ -9,6 +9,7 @@
 #include <Unreal/UObject.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 
+#include "Loader/Config/FriendlyPathResolver.h"
 #include "Loader/ResonableMaterials/ResonableMaterialAlterationApplier.h"
 #include "Loader/ResonableMaterials/ResonableMaterialAssetCloner.h"
 #include "Logger/Logger.h"
@@ -297,7 +298,8 @@ namespace
 
 		for (const auto& entry : entries)
 		{
-			const auto resolvedItemTypeCandidates = ResolveObjectCandidates(entry.GetInputItemPath());
+			const auto resolvedInputPath = MFM::Loader::Config::FriendlyPathResolver::ResolveInputItemPath(entry.GetInputItemPath(), entry.id);
+			const auto resolvedItemTypeCandidates = ResolveObjectCandidates(resolvedInputPath);
 			const auto itemTypeCandidates = ExpandItemTypeKeyCandidates(resolvedItemTypeCandidates);
 
 			if (entry.growthTimeSeconds.has_value())
@@ -320,10 +322,22 @@ namespace
 			auto* resonatableData = static_cast<UObject*>(nullptr);
 			if (!entry.outputs.empty())
 			{
+				std::vector<MFM::Loader::Config::MetalFarmOutputEntry> resolvedOutputs;
+				resolvedOutputs.reserve(entry.outputs.size());
+				for (std::size_t outputIndex = 0; outputIndex < entry.outputs.size(); ++outputIndex)
+				{
+					auto resolvedOutput = entry.outputs[outputIndex];
+					resolvedOutput.resourceClassPath = MFM::Loader::Config::FriendlyPathResolver::ResolveOutputResourceClassPath(
+						resolvedOutput.resourceClassPath,
+						entry.id,
+						outputIndex);
+					resolvedOutputs.emplace_back(std::move(resolvedOutput));
+				}
+
 				resonatableData = MFM::Loader::ResonableMaterials::ResonableMaterialAssetCloner::CloneForEntry(entry);
 				if (resonatableData)
 				{
-					const bool appliedOutputs = MFM::Loader::ResonableMaterials::ResonableMaterialAlterationApplier::ApplyOutputs(resonatableData, entry.outputs);
+					const bool appliedOutputs = MFM::Loader::ResonableMaterials::ResonableMaterialAlterationApplier::ApplyOutputs(resonatableData, resolvedOutputs);
 					if (!appliedOutputs)
 					{
 						PCL_WarnLog("MetalFarm entry '{}' could not apply outputs to cloned resonatable data yet; using cloned template object unchanged.", ToWideString(entry.id));
@@ -353,7 +367,7 @@ namespace
 				failedAnyEntry = true;
 				if (itemTypeCandidates.empty())
 				{
-					PCL_WarnLog("MetalFarm entry '{}' unresolved inputItemPath '{}'", ToWideString(entry.id), ToWideString(entry.GetInputItemPath()));
+					PCL_WarnLog("MetalFarm entry '{}' unresolved inputItemPath '{}'", ToWideString(entry.id), ToWideString(resolvedInputPath));
 				}
 				if (!resonatableData)
 				{

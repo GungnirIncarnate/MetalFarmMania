@@ -45,12 +45,12 @@ You define entries in a JSONC config file (comments supported), and the mod patc
   "entries": [
     {
       "id": "unique_entry_id",
-      "inputItemPath": "/Game/.../DA_SomeItemType.DA_SomeItemType_C",
+      "inputItem": "Flares",
       "growthSpeed": "medium",
       "growthTimeSeconds": 180.0,
       "outputs": [
         {
-          "resourceClassPath": "/Game/.../BP_SomeResource.BP_SomeResource_C",
+          "outputItem": "Celestine",
           "yield": 2,
           "dropChance": 1.0
         }
@@ -64,21 +64,32 @@ You define entries in a JSONC config file (comments supported), and the mod patc
 
 - id (required, string)
   - Unique identifier for this recipe entry.
-- inputItemPath (required, string)
-  - ItemType object path for the item inserted into the Metal Farm.
+- inputItem (required, string)
+  - Friendly token or ItemType object path for the item inserted into the Metal Farm.
+  - Legacy alias `inputItemPath` is still supported.
 - growthSpeed (optional, string)
   - One of: slow, medium, fast.
   - Default: medium.
 - growthTimeSeconds (optional, number)
-  - If present, must be greater than 0.
-  - Overrides growthSpeed with a custom timer.
+  - Optional custom grow time in seconds; if present, must be greater than 0.
+  - Takes priority over growthSpeed when both are set.
 - outputs (required, array)
   - At least one output object is required.
 
 ### Output Fields
 
-- resourceClassPath (required, string)
-  - Resource actor/class object path spawned as output.
+- outputItem (required, string)
+  - Friendly token or resource actor/class object path spawned as output.
+  - Legacy alias `resourceClassPath` is still supported.
+  - Friendly-name mode is resolved against loaded objects under `/Game/Blueprints/Items/`.
+
+Friendly-name matching rule:
+
+- The resolver prefers the token between the first and last underscore in the asset name.
+- Example input item assets:
+  - `DA_OxygenTank_Small_ItemType` -> use `OxygenTank_Small`
+  - `DA_OxygenTank_Medium_EquippableItemType` -> use `OxygenTank_Medium`
+- This avoids overlap where multiple assets share a broader substring such as `Fins`.
 - yield (required, integer)
   - Must be greater than 0.
 - dropChance (optional, number)
@@ -93,18 +104,32 @@ You define entries in a JSONC config file (comments supported), and the mod patc
   "entries": [
     {
       "id": "celestine",
-      "inputItemPath": "/Game/Data/ItemType/Tools/DA_Flares_ItemType.DA_Flares_ItemType_C",
+      "inputItem": "Flares",
       "growthSpeed": "medium",
+      "growthTimeSeconds": 210.0,
       "outputs": [
         {
-          "resourceClassPath": "/Game/Blueprints/Items/Resources/BP_Celestine.BP_Celestine_C",
+          "outputItem": "Celestine",
           "yield": 3,
           "dropChance": 1.0
         },
         {
-          "resourceClassPath": "/Game/Blueprints/Items/Resources/BP_Celestine.BP_Celestine_C",
+          "outputItem": "/Game/Blueprints/Items/Resources/BP_Celestine.BP_Celestine_C",
           "yield": 1,
           "dropChance": 0.5
+        }
+      ]
+    },
+    {
+      "id": "legacy_inputpath_example",
+      "inputItemPath": "/Game/Blueprints/Items/Equipment/Fins/DA_Fins_ItemType.DA_Fins_ItemType",
+      "growthSpeed": "slow",
+      "growthTimeSeconds": 300.0,
+      "outputs": [
+        {
+          "outputItem": "CopperOre",
+          "yield": 1,
+          "dropChance": 1.0
         }
       ]
     }
@@ -128,9 +153,12 @@ You define entries in a JSONC config file (comments supported), and the mod patc
 - Config not applied:
   - Verify file path is exactly Mods/MetalFarmMania/MetalFarmAdditions.jsonc.
   - Verify schemaVersion is 2 (or omit it).
-  - Verify each entry has id, inputItemPath, and valid outputs.
+  - Verify each entry has id, inputItem/inputItemPath, and valid outputs with outputItem/resourceClassPath.
 - Parse/validation errors:
   - Check for invalid number types, missing required fields, or dropChance outside 0.0 to 1.0.
+- Friendly-name resolution picked the wrong item:
+  - Use the full object path to force an exact asset.
+  - Exact base-name matches are preferred automatically (for example `Fins` resolves to `DA_Fins_ItemType`, not `DA_ImprovedFins_ItemType`).
 
 ## Known Bugs
 

@@ -67,6 +67,26 @@ namespace
 		return !outValue.empty();
 	}
 
+	auto ReadRequiredStringFromAliases(const json& object,
+	                                  const std::vector<const char*>& fieldNames,
+	                                  std::string& outValue) -> bool
+	{
+		for (const auto* fieldName : fieldNames)
+		{
+			if (!fieldName)
+			{
+				continue;
+			}
+
+			if (ReadRequiredString(object, fieldName, outValue))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	auto ReadFileToString(const std::filesystem::path& path, std::string& outContent) -> bool
 	{
 		std::ifstream file(path, std::ios::binary);
@@ -81,7 +101,9 @@ namespace
 		return true;
 	}
 
-	auto TryReadOutputs(const json& entryJson, std::vector<MFM::Loader::Config::MetalFarmOutputEntry>& outOutputs) -> bool
+	auto TryReadOutputs(const json& entryJson,
+	                   const std::string& entryId,
+	                   std::vector<MFM::Loader::Config::MetalFarmOutputEntry>& outOutputs) -> bool
 	{
 		const auto outputsIt = entryJson.find("outputs");
 		if (outputsIt == entryJson.end() || !outputsIt->is_array() || outputsIt->empty())
@@ -89,8 +111,10 @@ namespace
 			return false;
 		}
 
+		std::size_t outputIndex = 0;
 		for (const auto& outputJson : *outputsIt)
 		{
+			outputIndex++;
 			if (!outputJson.is_object())
 			{
 				return false;
@@ -121,7 +145,7 @@ namespace
 			};
 
 			MFM::Loader::Config::MetalFarmOutputEntry output{};
-			if (!ReadRequiredString(outputJson, "resourceClassPath", output.resourceClassPath))
+			if (!ReadRequiredStringFromAliases(outputJson, {"outputItem", "resourceClassPath"}, output.resourceClassPath))
 			{
 				return false;
 			}
@@ -233,10 +257,10 @@ namespace MFM::Loader::Config
 
 			MetalFarmAdditionEntry entry{};
 			const bool hasCoreFields = ReadRequiredString(entryJson, "id", entry.id) &&
-			                           ReadRequiredString(entryJson, "inputItemPath", entry.inputItemPath);
+			                           ReadRequiredStringFromAliases(entryJson, {"inputItem", "inputItemPath"}, entry.inputItemPath);
 			if (!hasCoreFields)
 			{
-				PCL_WarnLog("Skipping MetalFarm entry #{} due to missing required fields", index);
+				PCL_WarnLog("Skipping MetalFarm entry #{} due to missing required fields (id + inputItem/inputItemPath)", index);
 				continue;
 			}
 
@@ -267,7 +291,7 @@ namespace MFM::Loader::Config
 			entry.resonatableDataPath = kDefaultCopperResonatablePath;
 			entry.itemTypePath = entry.inputItemPath;
 
-			if (!TryReadOutputs(entryJson, entry.outputs))
+			if (!TryReadOutputs(entryJson, entry.id, entry.outputs))
 			{
 				PCL_WarnLog("Skipping MetalFarm entry #{} due to invalid or missing outputs array", index);
 				continue;
