@@ -44,6 +44,41 @@ namespace
 		return normalized;
 	}
 
+	auto ResolveObjectFromPath(const std::string& objectPath) -> UObject*
+	{
+		if (objectPath.empty())
+		{
+			return nullptr;
+		}
+
+		const auto tryResolve = [](const std::string& candidate) -> UObject*
+		{
+			if (candidate.empty())
+			{
+				return nullptr;
+			}
+
+			const auto wideCandidate = ToWideString(candidate);
+			return UObjectGlobals::StaticFindObject(nullptr, nullptr, wideCandidate.c_str());
+		};
+
+		if (auto* resolved = tryResolve(objectPath))
+		{
+			return resolved;
+		}
+
+		const auto normalized = NormalizeObjectPath(objectPath);
+		if (normalized != objectPath)
+		{
+			if (auto* resolved = tryResolve(normalized))
+			{
+				return resolved;
+			}
+		}
+
+		return nullptr;
+	}
+
 
 	auto SetSoftPathStruct(FStructProperty* structProperty, void* structValue, const std::string& objectPath) -> bool
 	{
@@ -140,6 +175,25 @@ namespace
 		if (!property || !container || resourceClassPath.empty())
 		{
 			return false;
+		}
+
+		if (resourceClassPath.find("/Data/ItemType/") != std::string::npos)
+		{
+			PCL_WarnLog(
+				"Resonatable output resourceClassPath '{}' looks like an ItemType asset path. This field requires a world actor class path (for example '/Game/Blueprints/Items/Resources/BP_Copper.BP_Copper_C').",
+				ToWideString(resourceClassPath));
+		}
+
+		if (auto* resolved = ResolveObjectFromPath(resourceClassPath))
+		{
+			if (resolved->GetClassPrivate() && resolved->GetClassPrivate()->GetName() == STR("UWEItemType"))
+			{
+				PCL_WarnLog(
+					"Resonatable output resourceClassPath '{}' resolved to ItemType object '{}'. Expected an actor class path (for example '/Game/Blueprints/Items/Resources/BP_Copper.BP_Copper_C').",
+					ToWideString(resourceClassPath),
+					resolved->GetFullName());
+				return false;
+			}
 		}
 
 		if (auto* softClassProperty = CastField<FSoftClassProperty>(property))

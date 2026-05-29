@@ -96,24 +96,50 @@ namespace
 				return false;
 			}
 
+			auto findFieldByNormalizedName = [&outputJson](const char* normalizedName) -> const json*
+			{
+				const auto directIt = outputJson.find(normalizedName);
+				if (directIt != outputJson.end())
+				{
+					return &(*directIt);
+				}
+
+				for (const auto& item : outputJson.items())
+				{
+					std::string key = item.key();
+					key.erase(std::remove_if(key.begin(), key.end(), [](unsigned char ch) {
+						return std::isspace(ch);
+					}), key.end());
+
+					if (key == normalizedName)
+					{
+						return &item.value();
+					}
+				}
+
+				return nullptr;
+			};
+
 			MFM::Loader::Config::MetalFarmOutputEntry output{};
 			if (!ReadRequiredString(outputJson, "resourceClassPath", output.resourceClassPath))
 			{
 				return false;
 			}
 
-			if (!outputJson.contains("yield") || !outputJson["yield"].is_number_integer())
+			const auto* yieldValue = findFieldByNormalizedName("yield");
+			if (!yieldValue || !yieldValue->is_number_integer())
 			{
 				return false;
 			}
 
-			output.yield = outputJson["yield"].get<int>();
+			output.yield = yieldValue->get<int>();
 			if (output.yield <= 0)
 			{
 				return false;
 			}
 
-			output.dropChance = outputJson.value("dropChance", 1.0f);
+			const auto* dropChanceValue = findFieldByNormalizedName("dropChance");
+			output.dropChance = dropChanceValue && dropChanceValue->is_number() ? dropChanceValue->get<float>() : 1.0f;
 			if (output.dropChance < 0.0f || output.dropChance > 1.0f)
 			{
 				return false;
