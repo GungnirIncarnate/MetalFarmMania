@@ -40,6 +40,12 @@ namespace
 		int bestScore{std::numeric_limits<int>::min()};
 	};
 
+	struct HeuristicResolveResult
+	{
+		std::string objectPath;
+		bool foundLoadedObject{false};
+	};
+
 	std::vector<CandidatePath> s_inputCandidates;
 	std::vector<CandidatePath> s_outputCandidates;
 	bool s_cacheBuilt = false;
@@ -287,9 +293,6 @@ namespace
 		});
 
 		s_cacheBuilt = true;
-		PCL_Log("Friendly path resolver cache built (inputs={}, outputs={}).",
-		        static_cast<std::uint32_t>(s_inputCandidates.size()),
-		        static_cast<std::uint32_t>(s_outputCandidates.size()));
 	}
 
 	auto ScoreCandidate(const CandidatePath& candidate, const std::string& tokenNormalized) -> int
@@ -477,18 +480,26 @@ namespace
 		return candidates;
 	}
 
-	auto ResolveHeuristicPath(const std::string& configuredValue, PathKind kind) -> std::string
+	auto ResolveHeuristicPath(const std::string& configuredValue, PathKind kind) -> HeuristicResolveResult
 	{
+		HeuristicResolveResult result{};
 		const auto candidates = BuildHeuristicPathCandidates(configuredValue, kind);
 		for (const auto& candidate : candidates)
 		{
 			if (TryResolveExistingObjectPath(candidate))
 			{
-				return candidate;
+				result.objectPath = candidate;
+				result.foundLoadedObject = true;
+				return result;
 			}
 		}
 
-		return candidates.empty() ? std::string{} : candidates.front();
+		if (!candidates.empty())
+		{
+			result.objectPath = candidates.front();
+		}
+
+		return result;
 	}
 
 	auto ResolveConfiguredValue(const std::string& configuredValue, PathKind kind, const std::string& contextLabel) -> std::string
@@ -506,36 +517,24 @@ namespace
 		const auto resolved = ResolveFriendlyToken(configuredValue, kind);
 		if (resolved.objectPath.empty())
 		{
-			const auto heuristicPath = ResolveHeuristicPath(configuredValue, kind);
-			if (!heuristicPath.empty())
+			const auto heuristicResult = ResolveHeuristicPath(configuredValue, kind);
+			if (!heuristicResult.objectPath.empty())
 			{
-				PCL_WarnLog("Friendly path resolver could not find loaded object for '{}' in {}. Falling back to heuristic path '{}'.",
-				            ToWide(configuredValue),
-				            ToWide(contextLabel),
-				            ToWide(heuristicPath));
-				return heuristicPath;
+				if (!heuristicResult.foundLoadedObject)
+				{
+					PCL_WarnLog("Friendly path resolver could not resolve '{}' for {}. Heuristic guess '{}' was not found as a loaded object.",
+					            ToWide(configuredValue),
+					            ToWide(contextLabel),
+					            ToWide(heuristicResult.objectPath));
+				}
+
+				return heuristicResult.objectPath;
 			}
 
 			PCL_WarnLog("Friendly path resolver could not resolve '{}' for {}. Keep using full object path for this entry.",
 			            ToWide(configuredValue),
 			            ToWide(contextLabel));
 			return configuredValue;
-		}
-
-		if (resolved.matchCount > 1)
-		{
-			PCL_WarnLog("Friendly path resolver found {} equally scored matches for '{}' in {}. Using '{}'.",
-			            static_cast<std::uint32_t>(resolved.matchCount),
-			            ToWide(configuredValue),
-			            ToWide(contextLabel),
-			            ToWide(resolved.objectPath));
-		}
-		else
-		{
-			PCL_Log("Friendly path resolver mapped '{}' to '{}' for {}.",
-			        ToWide(configuredValue),
-			        ToWide(resolved.objectPath),
-			        ToWide(contextLabel));
 		}
 
 		return resolved.objectPath;
