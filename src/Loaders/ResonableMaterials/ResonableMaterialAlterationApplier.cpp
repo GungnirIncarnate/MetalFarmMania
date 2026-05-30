@@ -222,10 +222,28 @@ namespace
 			}
 
 			const auto normalizedWide = ToWideString(normalizedClassPath);
-			const std::vector<std::wstring> importCandidates{
+			std::vector<std::wstring> importCandidates{
 				normalizedWide,
 				L"Class'" + normalizedWide + L"'",
 				L"BlueprintGeneratedClass'" + normalizedWide + L"'"};
+
+			const auto blueprintSlashIndex = normalizedClassPath.find_last_of('/');
+			const auto blueprintNameStart = (blueprintSlashIndex == std::string::npos) ? 0 : blueprintSlashIndex + 1;
+			const auto blueprintDotIndex = normalizedClassPath.find('.', blueprintNameStart);
+			if (blueprintDotIndex != std::string::npos)
+			{
+				const auto objectName = normalizedClassPath.substr(blueprintDotIndex + 1);
+				if (objectName.size() > 2 && objectName.compare(objectName.size() - 2, 2, "_C") == 0)
+				{
+					std::string blueprintPath = normalizedClassPath;
+					blueprintPath.resize(blueprintDotIndex + 1);
+					blueprintPath += objectName.substr(0, objectName.size() - 2);
+
+					const auto blueprintWide = ToWideString(blueprintPath);
+					importCandidates.emplace_back(blueprintWide);
+					importCandidates.emplace_back(L"Blueprint'" + blueprintWide + L"'");
+				}
+			}
 
 			for (const auto& candidateText : importCandidates)
 			{

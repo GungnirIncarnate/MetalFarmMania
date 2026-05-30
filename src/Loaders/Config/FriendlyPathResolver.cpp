@@ -51,7 +51,9 @@ namespace
 	bool s_cacheBuilt = false;
 
 	constexpr const char* kInputRoot = "/Game/Data/ItemType/";
-	constexpr const char* kOutputRoot = "/Game/Blueprints/Items/";
+	constexpr std::array<const char*, 2> kOutputRoots = {
+		"/Game/Blueprints/Items/",
+		"/Game/Blueprints/Resources/"};
 
 	auto ToWide(const std::string& value) -> std::wstring
 	{
@@ -191,6 +193,13 @@ namespace
 		return objectPath.substr(nameStart, dotIndex - nameStart);
 	}
 
+	auto IsBlueprintOutputPath(const std::string& objectPath) -> bool
+	{
+		const std::string assetName = Lower(ExtractAssetName(objectPath));
+		const std::string objectName = Lower(ExtractObjectName(objectPath));
+		return StartsWithInsensitive(assetName, "bp_") || StartsWithInsensitive(objectName, "bp_");
+	}
+
 	auto BuildUnderscoreAlias(const std::string& assetName) -> std::string
 	{
 		if (assetName.empty())
@@ -284,9 +293,16 @@ namespace
 			{
 				AddCandidate(s_inputCandidates, objectPath);
 			}
-			if (StartsWithInsensitive(objectPath, kOutputRoot))
+			for (const auto* outputRoot : kOutputRoots)
 			{
-				AddCandidate(s_outputCandidates, objectPath);
+				if (StartsWithInsensitive(objectPath, outputRoot))
+				{
+					if (IsBlueprintOutputPath(objectPath))
+					{
+						AddCandidate(s_outputCandidates, objectPath);
+					}
+					break;
+				}
 			}
 
 			return RC::LoopAction::Continue;
@@ -302,14 +318,14 @@ namespace
 			return std::numeric_limits<int>::min();
 		}
 
+		if (candidate.loweredBaseName == tokenNormalized)
+		{
+			return 1400;
+		}
+
 		if (candidate.loweredUnderscoreAlias == tokenNormalized)
 		{
 			return 1300;
-		}
-
-		if (candidate.loweredBaseName == tokenNormalized)
-		{
-			return 1000;
 		}
 		if (NormalizeToken(candidate.loweredAssetName) == tokenNormalized)
 		{
@@ -455,7 +471,8 @@ namespace
 		}
 		else
 		{
-			const std::array<std::string, 5> roots{
+			const std::array<std::string, 6> roots{
+				"/Game/Blueprints/Resources/",
 				"/Game/Blueprints/Items/Resources/",
 				"/Game/Blueprints/Items/Equipment/",
 				"/Game/Blueprints/Items/Tools/",
@@ -520,14 +537,6 @@ namespace
 			const auto heuristicResult = ResolveHeuristicPath(configuredValue, kind);
 			if (!heuristicResult.objectPath.empty())
 			{
-				if (!heuristicResult.foundLoadedObject)
-				{
-					PCL_WarnLog("Friendly path resolver could not resolve '{}' for {}. Heuristic guess '{}' was not found as a loaded object.",
-					            ToWide(configuredValue),
-					            ToWide(contextLabel),
-					            ToWide(heuristicResult.objectPath));
-				}
-
 				return heuristicResult.objectPath;
 			}
 
