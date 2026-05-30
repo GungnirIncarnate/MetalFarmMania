@@ -230,9 +230,7 @@ This file lists the friendly names currently accepted from the extracted FModel 
 ## Output Names
 ### (root)
 - `AdvancedBattery`
-- `BasePickupItem`
 - `BasicBattery`
-- `Blockout_Crate_Blighted`
 - `BoxOfHolding`
 - `BubblyCysticSoup`
 - `CherimoyaChutney`
@@ -247,7 +245,6 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `CookedSpineytail`
 - `CoralCookie`
 - `CystSouffle`
-- `EmitSporeBiomod_Spore`
 - `FloatingLocker_Deprecated`
 - `Food`
 - `HalfmoonJerky`
@@ -270,9 +267,6 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `PowerCell`
 - `PowerCellV2`
 - `SugarAnalog`
-- `SupplyCrate_Blighted`
-- `SupplyCrate_RequiresBiomod`
-- `SupplyCrate`
 - `UrchinPudding`
 - `Water`
 - `WaterFilterGland_ConsumableItem_1`
@@ -282,19 +276,6 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `WaterFilterGland_ConsumableItem_5`
 - `WaterFilterGland_ConsumableItem_6`
 - `WaterSlug`
-- `WaterSlugWorldPopProxy`
-- `WorldSupplyLocker_Blighted`
-- `WorldSupplyLocker`
-- `TextInputInteraction_RotatingNames`
-- `ToolDispenser`
-- `ToolHolder`
-- `CookedPneumoRecipe`
-- `WaterFilterGland_Consumable_ItemType_1`
-- `WaterFilterGland_Consumable_ItemType_2`
-- `WaterFilterGland_Consumable_ItemType_3`
-- `WaterFilterGland_Consumable_ItemType_4`
-- `WaterFilterGland_Consumable_ItemType_5`
-- `WaterFilterGland_Consumable_ItemType_6`
 ### Deployables
 - `FloatingLocker_Carryable`
 - `HeavyFloatingLocker_Carryable`
@@ -302,13 +283,8 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `PowerCellBank_Carryable`
 - `SuperHeavyFloatingLocker_Carryable`
 - `WorkLight_Carryable`
-- `CarryableAbilityTrigger`
-- `HardPoint`
 ### Deployables\DeployableElevator
 - `DeployableElevator`
-### Deployables
-- `CarryableAbilityTriggerTarget`
-- `CarryableAbilities_RequiredAttributes`
 ### Equipment
 - `Fins`
 - `HeatResistanceTorsoItem_Level1`
@@ -345,8 +321,6 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `Grease`
 - `Lead`
 - `Lithium`
-- `LuciferRotsac_Big`
-- `LuciferRotsac_Small`
 - `LuciferRotsac`
 - `MetalSalvage_DroppedItem`
 - `MetalSalvage_Small`
@@ -371,23 +345,11 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `Troilite`
 - `Unobtanium`
 - `WiringKit`
-- `WorldPopSpawnedCopper`
-- `WorldPopSpawnedQuartz`
-- `WorldPopSpawnedResourceItem_BaseClass`
-- `WorldPopSpawnedResourceProxy`
-- `WorldPopSpawnedSilver`
-- `WorldPopSpawnedSilverLoose`
-- `WorldPopSpawnedSulfurLoose`
-- `WorldPopSpawnedTitanium`
 ### Blueprints\Resources
-- `AcidAnemone`
 - `AcidAnemone_MedigelSac`
 - `AcidAnemone_MedigelSac_Dropped`
-- `AcidAnemoneFruit`
 - `AxumBioprintCulture`
-- `AxumBioprintCulture_Cage`
 - `CharismaticSlime`
-- `NecroleiCystFruit`
 ### Resources\Deprecated
 - `AirFruitResource`
 - `AnemoneSample`
@@ -415,9 +377,6 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `Salvage_Tadpole_02`
 - `Salvage_Tadpole_03`
 - `Salvage_Wakemaker_02`
-### (root)
-- `CookedPneumo_Cooked`
-- `WaterFilterGland_Consumable_Temp`
 ### Tools
 - `AirBladder`
 - `Beacon`
@@ -435,10 +394,6 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `SonicResonatorV2`
 - `SurvivalMultiTool`
 - `Wakemaker`
-- `EMTTorsionPoint`
-- `ToolBatteryMesh`
-### Tools\Resonator
-- `SonicBubbleProjectile`
 ### Upgrades
 - `TadpoleUpgrade_Crushdepth_01`
 - `TadpoleUpgrade_Crushdepth_02`
@@ -448,3 +403,50 @@ This file lists the friendly names currently accepted from the extracted FModel 
 - `TadpoleUpgrade_HydraulicMuffler`
 - `TadpoleUpgrade_PhotovoltaicCharger`
 
+
+## Output Validation
+### Needs Verification (Ambiguous)
+- `AcidAnemone`
+- `AcidAnemoneFruit`
+- `AxumBioprintCulture_Cage`
+- `BasePickupItem`
+- `Blockout_Crate_Blighted`
+- `EmitSporeBiomod_Spore`
+- `LuciferRotsac_Big`
+- `LuciferRotsac_Small`
+- `NecroleiCystFruit`
+- `SonicBubbleProjectile`
+- `SupplyCrate`
+- `SupplyCrate_Blighted`
+- `SupplyCrate_RequiresBiomod`
+- `WaterSlugWorldPopProxy`
+- `WorldPopSpawnedCopper`
+- `WorldPopSpawnedQuartz`
+- `WorldPopSpawnedResourceItem_BaseClass`
+- `WorldPopSpawnedResourceProxy`
+- `WorldPopSpawnedSilver`
+- `WorldPopSpawnedSilverLoose`
+- `WorldPopSpawnedSulfurLoose`
+- `WorldPopSpawnedTitanium`
+- `WorldSupplyLocker`
+- `WorldSupplyLocker_Blighted`
+
+### Non-Droppable / Invalid
+- `CarryableAbilities_RequiredAttributes`
+- `CarryableAbilityTrigger`
+- `CarryableAbilityTriggerTarget`
+- `CookedPneumo_Cooked`
+- `CookedPneumoRecipe`
+- `EMTTorsionPoint`
+- `HardPoint`
+- `TextInputInteraction_RotatingNames`
+- `ToolBatteryMesh`
+- `ToolDispenser`
+- `ToolHolder`
+- `WaterFilterGland_Consumable_ItemType_1`
+- `WaterFilterGland_Consumable_ItemType_2`
+- `WaterFilterGland_Consumable_ItemType_3`
+- `WaterFilterGland_Consumable_ItemType_4`
+- `WaterFilterGland_Consumable_ItemType_5`
+- `WaterFilterGland_Consumable_ItemType_6`
+- `WaterFilterGland_Consumable_Temp`
